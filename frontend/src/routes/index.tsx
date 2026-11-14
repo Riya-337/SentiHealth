@@ -166,8 +166,13 @@ function ShieldLogo({ className = "h-12 w-12" }: { className?: string }) {
   );
 }
 
-const CURRENT_IP = "198.51.100.22"; // simulated current request IP
 const SESSION_KNOWN_IP_KEY = "sentihealth.knownIP";
+
+/** The page itself is only encrypted when served over HTTPS (or opened on localhost). */
+function pageIsEncrypted(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.location.protocol === "https:" || window.location.hostname === "localhost";
+}
 
 type Stage = "login" | "otp" | "granted" | "suspended";function LoginPage() {
   const router = useRouter();
@@ -449,25 +454,36 @@ type Stage = "login" | "otp" | "granted" | "suspended";function LoginPage() {
                 </motion.button>
               </form>
 
-              <div className="mt-7 flex items-center justify-between rounded-2xl border border-border bg-secondary/50 px-4 py-3">
-                <div className="flex items-center gap-3">
-                  <span className="relative flex h-2.5 w-2.5">
-                    <span className="absolute inline-flex h-full w-full rounded-full bg-success animate-status" />
-                    <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-success" />
-                  </span>
-                  <div className="leading-tight">
-                    <p className="text-[10px] font-semibold tracking-[0.22em] text-muted-foreground">
-                      SYSTEM STATUS
-                    </p>
-                    <p className="text-[11px] font-semibold tracking-[0.18em] text-success">
-                      ENCRYPTED SESSION ACTIVE
-                    </p>
+              {(() => {
+                const secure = pageIsEncrypted();
+                // Full class names so Tailwind can find them.
+                const dot = secure ? "bg-success" : "bg-warn";
+                const text = secure ? "text-success" : "text-warn";
+                const ring = secure
+                  ? "border-success/40 bg-success/10 text-success"
+                  : "border-warn/40 bg-warn/10 text-warn";
+                return (
+                  <div className="mt-7 flex items-center justify-between rounded-2xl border border-border bg-secondary/50 px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <span className="relative flex h-2.5 w-2.5">
+                        <span className={`absolute inline-flex h-full w-full rounded-full animate-status ${dot}`} />
+                        <span className={`relative inline-flex h-2.5 w-2.5 rounded-full ${dot}`} />
+                      </span>
+                      <div className="leading-tight">
+                        <p className="text-[10px] font-semibold tracking-[0.22em] text-muted-foreground">
+                          CONNECTION
+                        </p>
+                        <p className={`text-[11px] font-semibold tracking-[0.18em] ${text}`}>
+                          {secure ? "TLS ENCRYPTED (HTTPS)" : "NOT ENCRYPTED (HTTP) — LOCAL TESTING ONLY"}
+                        </p>
+                      </div>
+                    </div>
+                    <div className={`flex h-9 w-9 items-center justify-center rounded-full border ${ring}`}>
+                      <Lock className="h-4 w-4" />
+                    </div>
                   </div>
-                </div>
-                <div className="flex h-9 w-9 items-center justify-center rounded-full border border-success/40 bg-success/10 text-success">
-                  <Lock className="h-4 w-4" />
-                </div>
-              </div>
+                );
+              })()}
             </motion.section>
           )}
 
@@ -476,18 +492,18 @@ type Stage = "login" | "otp" | "granted" | "suspended";function LoginPage() {
               key="otp"
               username={loginUsername}
               isAdmin={isAdminFlow}
-              onSuccess={(token, isAdmin) => {
+              onSuccess={(token, isAdmin, clientIp) => {
                 appendEmergencyAudit({
                   type: "Emergency Access",
                   timestamp: auditNow(),
-                  ip: CURRENT_IP,
+                  ip: clientIp,
                   status: "Verified",
                 });
                 pushLog("INFO", "Emergency verification succeeded. Session recorded in audit chain.");
                 setStage("granted");
                 sessionStorage.setItem("auth_token", token);
                 sessionStorage.setItem("is_admin", isAdmin ? "1" : "0");
-                sessionStorage.setItem(SESSION_KNOWN_IP_KEY, CURRENT_IP);
+                sessionStorage.setItem(SESSION_KNOWN_IP_KEY, clientIp);
                 setTimeout(() => router.navigate({ to: "/dashboard" }), 1200);
 
 
@@ -496,7 +512,7 @@ type Stage = "login" | "otp" | "granted" | "suspended";function LoginPage() {
                 appendEmergencyAudit({
                   type: "Emergency Access",
                   timestamp: auditNow(),
-                  ip: CURRENT_IP,
+                  ip: sessionStorage.getItem(SESSION_KNOWN_IP_KEY) ?? "unknown",
                   status: "Blocked",
                 });
                 sessionStorage.setItem("emergencyAccessLocked", "true");
@@ -618,7 +634,7 @@ function EmergencyOtpCard({
   username,
   isAdmin,
 }: {
-  onSuccess: (token: string, isAdmin: boolean) => void;
+  onSuccess: (token: string, isAdmin: boolean, clientIp: string) => void;
   onLockout: () => void;
   username: string;
   isAdmin: boolean;
@@ -649,7 +665,7 @@ function EmergencyOtpCard({
 
       // Only a token issued by the backend opens the dashboard.
       if (response.ok && data.success && data.token) {
-        onSuccess(data.token, !!data.is_admin);
+        onSuccess(data.token, !!data.is_admin, String(data.client_ip ?? "unknown"));
         return;
       }
 

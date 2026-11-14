@@ -5,6 +5,14 @@ export type Tier = "High" | "Medium" | "Low";
 export type Action = "pending" | "resolved" | "auto-locked" | "forensics_generated" | "denied" | "blocked" | "admin_released";
 export type SystemStatus = "NORMAL" | "THREAT" | "LOCKDOWN";
 
+export interface TopFeature {
+  feature: string;
+  label: string;
+  value: number;
+  normal_range: [number, number];
+  share: number; // 0..1, share of the abnormal signal
+}
+
 export interface ThreatEvent {
   id: string;
   timestamp: string;
@@ -18,6 +26,22 @@ export interface ThreatEvent {
   lng: number;
   country: string;
   city: string;
+  topFeatures?: TopFeature[];   // indicators outside their normal range (empty = none)
+  attackType?: string;
+  modelDisagreement?: number;   // std-dev of the five models' High probabilities
+}
+
+type RawThreat = {
+  ip: string; tier: string; score: number; timestamp: string; action: string;
+  reason?: string; shap_url?: string;
+  top_features?: TopFeature[]; attack_type?: string; model_disagreement?: number;
+};
+
+/** Small deterministic hash so the same IP always lands on the same map spot. */
+function ipHash(ip: string): number {
+  let h = 0;
+  for (let i = 0; i < ip.length; i++) h = (h * 31 + ip.charCodeAt(i)) >>> 0;
+  return h;
 }
 
 export interface MLMetricRow {
@@ -72,17 +96,16 @@ function geoForIP(ip: string): { lat: number; lng: number; city: string; country
   return IP_GEO[seed] ?? IP_GEO[0];
 }
 
-function reasonForTier(tier: Tier): string {
+/** Demo mode only: a label for simulated events, chosen by IP so it does not change on re-render. */
+function reasonForTier(tier: Tier, ip: string): string {
   const arr = REASONS[tier];
-  return arr[Math.floor(Math.random() * arr.length)];
+  return arr[ipHash(ip) % arr.length];
 }
 
-function mapFlaskEvent(raw: {
-  ip: string; tier: string; score: number; timestamp: string; action: string;
-  reason?: string; shap_url?: string;
-}, idx: number): ThreatEvent {
+function mapFlaskEvent(raw: RawThreat, idx: number): ThreatEvent {
   const tier = raw.tier as Tier;
   const geo = geoForIP(raw.ip);
+  const h = ipHash(raw.ip);
   return {
     id: `${raw.timestamp}-${idx}`,
     timestamp: raw.timestamp,
@@ -90,13 +113,17 @@ function mapFlaskEvent(raw: {
     tier,
     score: raw.score,
     action: raw.action as Action,
-    // Use real model explanation if present, fall back to tier-based label
-    reason: raw.reason || reasonForTier(tier),
+    // Only the model's own explanation; never an invented attack name.
+    reason: raw.reason || "",
     shap_url: raw.shap_url || "",
-    lat: geo.lat + (Math.random() - 0.5) * 0.8,
-    lng: geo.lng + (Math.random() - 0.5) * 0.8,
+    // Fixed small offset per IP so repeated events from one address stack on one spot.
+    lat: geo.lat + (((h % 1000) / 1000) - 0.5) * 0.8,
+    lng: geo.lng + ((((h >>> 10) % 1000) / 1000) - 0.5) * 0.8,
     country: geo.country,
     city: geo.city,
+    topFeatures: raw.top_features,
+    attackType: raw.attack_type,
+    modelDisagreement: raw.model_disagreement,
   };
 }
 
@@ -121,9 +148,7 @@ function buildSnapshotFromEvents(
     .map((e) => ({ t: e.timestamp.slice(11, 16), score: e.score }));
 
   const lastHigh = recent.find((e) => e.tier === "High");
-  const lastHighAt = lastHigh
-    ? new Date(lastHigh.timestamp).getTime()
-    : Date.now() - 14 * 60_000;
+  const lastHighAt = lastHigh ? new Date(lastHigh.timestamp).getTime() : 0; // 0 = none yet
 
   return {
     status,
@@ -146,7 +171,7 @@ function buildSnapshot(apiData: {
   blocked_count: number;
   total_threat_count?: number;
   all_tier_counts?: { High: number; Medium: number; Low: number };
-  threats: { ip: string; tier: string; score: number; timestamp: string; action: string; reason?: string; shap_url?: string }[];
+  threats: RawThreat[];
 }): SentinelSnapshot {
   const recent = apiData.threats.map(mapFlaskEvent);
   const status: SystemStatus =
@@ -308,7 +333,7 @@ export function useSentinel(autoRefresh = true): SentinelSnapshot {
         tier,
         score: isHigh ? 0.85 + Math.random() * 0.12 : 0.25 + Math.random() * 0.45,
         action: isHigh ? "blocked" : "resolved",
-        reason: reasonForTier(tier),
+        reason: reasonForTier(tier, randomIP.prefix),
         shap_url: "",
         lat: randomIP.lat + (Math.random() - 0.5) * 0.5,
         lng: randomIP.lng + (Math.random() - 0.5) * 0.5,

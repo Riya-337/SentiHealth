@@ -538,12 +538,12 @@ function MTTRCard({ since }: { since: number }) {
     <Card>
       <CardTitle>3. MTTR — Time Since Last High-Tier Alert</CardTitle>
       <div className="flex items-center justify-center gap-4 py-4">
-        <Timer className="h-12 w-12 text-status-threat" />
+        <Timer className={`h-12 w-12 ${since ? "text-status-threat" : "text-muted-foreground"}`} />
         <div>
-          <div className="font-mono-sec text-5xl font-bold tracking-tight text-status-threat">
-            {formatMTTR(since)}
+          <div className={`font-mono-sec text-5xl font-bold tracking-tight ${since ? "text-status-threat" : "text-muted-foreground"}`}>
+            {since ? formatMTTR(since) : "—"}
           </div>
-          <div className="text-xs text-muted-foreground">hh:mm:ss</div>
+          <div className="text-xs text-muted-foreground">{since ? "hh:mm:ss" : "no High-tier alert recorded yet"}</div>
         </div>
       </div>
     </Card>
@@ -1608,6 +1608,46 @@ function ThreatDetailDrawer({
               {threat.reason || "No explanation available."}
             </p>
           </div>
+
+          {/* why this score: indicators outside their normal range */}
+          {threat.topFeatures && (
+            <div>
+              <div className="mb-1.5 flex items-center justify-between">
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Why this score</div>
+                {threat.attackType && threat.attackType !== "normal" && (
+                  <span className="rounded-md border border-border px-2 py-0.5 text-[10px] text-muted-foreground">
+                    sensor: {threat.attackType}
+                  </span>
+                )}
+              </div>
+              {threat.topFeatures.length === 0 ? (
+                <p className="rounded-xl border border-border bg-muted/30 px-4 py-3 text-[12px] text-muted-foreground">
+                  All eight indicators are inside their normal range.
+                </p>
+              ) : (
+                <ul className="space-y-2 rounded-xl border border-border bg-muted/30 px-4 py-3">
+                  {threat.topFeatures.map((f) => (
+                    <li key={f.feature}>
+                      <div className="flex items-center justify-between text-[12px]">
+                        <span className="font-medium">{f.label}</span>
+                        <span className="font-mono-sec text-muted-foreground">
+                          {f.value} <span className="opacity-70">(normal {f.normal_range[0]}–{f.normal_range[1]})</span>
+                        </span>
+                      </div>
+                      <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                        <div className={`h-full rounded-full ${scoreColor}`} style={{ width: `${Math.round(f.share * 100)}%` }} />
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {typeof threat.modelDisagreement === "number" && (
+                <div className="mt-1.5 text-[11px] text-muted-foreground">
+                  Model disagreement (std-dev of the five models' High probabilities): {threat.modelDisagreement.toFixed(3)}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* action + timestamp */}
           <div className="grid grid-cols-2 gap-4">

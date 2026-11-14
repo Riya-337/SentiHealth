@@ -670,6 +670,7 @@ def api_verify_otp():
         "token": token,
         "username": username,
         "is_admin": is_admin,
+        "client_ip": client_ip,  # the address the server saw; the browser cannot know its own IP
     })
 
 

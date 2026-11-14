@@ -93,6 +93,104 @@ last_audit_hash = hashlib.sha256(b"init").hexdigest()
 import uuid
 from context import build_context, apply_context_modifier
 
+
+# ---------------------------------------------------------------------------
+# Per-event explanation.
+# Each feature is compared with the normal operating range of healthy hospital traffic
+# (the ranges data_generator.py uses for normal rows). Only the part of a value that lies
+# OUTSIDE that range counts, weighted by the Random Forest's feature importance, so the
+# explanation names the indicators that actually pushed this event up.
+# ---------------------------------------------------------------------------
+_FEATURE_COLS = ['failed_logins', 'cpu_usage', 'memory_spike',
+                 'ehr_access_per_hour', 'lateral_movement_events',
+                 'data_export_volume_kb', 'access_time_deviation',
+                 'source_ip_reputation']
+
+# (low, high) of normal traffic. source_ip_reputation is the one feature where LOWER is worse.
+NORMAL_RANGE = {
+    'failed_logins':           (0.0, 5.0),
+    'cpu_usage':               (0.10, 0.60),
+    'memory_spike':            (0.0, 0.0),
+    'ehr_access_per_hour':     (0.0, 30.0),
+    'lateral_movement_events': (0.0, 1.0),
+    'data_export_volume_kb':   (0.0, 500.0),
+    'access_time_deviation':   (0.0, 0.30),
+    'source_ip_reputation':    (0.80, 1.0),
+}
+_LOWER_IS_WORSE = {'source_ip_reputation'}
+FEATURE_LABEL = {
+    'failed_logins':           'failed logins',
+    'cpu_usage':               'CPU usage',
+    'memory_spike':            'memory spike',
+    'ehr_access_per_hour':     'EHR records accessed per hour',
+    'lateral_movement_events': 'lateral-movement events',
+    'data_export_volume_kb':   'data exported (KB)',
+    'access_time_deviation':   'access-time deviation',
+    'source_ip_reputation':    'source IP reputation',
+}
+
+
+def _feature_importances() -> dict:
+    """Random Forest importances from the calibrated model; equal weights if unavailable."""
+    try:
+        cc = models_cache['rf'].calibrated_classifiers_[0]
+        base = getattr(cc, 'estimator', None) or getattr(cc, 'base_estimator', None)
+        imp = list(base.feature_importances_)
+        if len(imp) == len(_FEATURE_COLS) and sum(imp) > 0:
+            return dict(zip(_FEATURE_COLS, imp))
+    except Exception:
+        pass
+    return {c: 1.0 / len(_FEATURE_COLS) for c in _FEATURE_COLS}
+
+
+def _fmt(v: float) -> str:
+    return f"{v:,.0f}" if abs(v) >= 10 else f"{v:.2f}".rstrip('0').rstrip('.')
+
+
+def explain_event(features: dict) -> tuple[list, dict]:
+    """Return (top_features, feature_values). top_features: up to 3 dicts, largest share first,
+    only for indicators outside their normal range; empty list means nothing was abnormal."""
+    imp = _feature_importances()
+    values, contrib = {}, {}
+    for col in _FEATURE_COLS:
+        try:
+            v = float(features.get(col, 0.0) or 0.0)
+        except (TypeError, ValueError):
+            v = 0.0
+        values[col] = v
+        lo, hi = NORMAL_RANGE[col]
+        width = max(hi - lo, 1e-6)
+        excess = (lo - v) if col in _LOWER_IS_WORSE else (v - hi)
+        contrib[col] = imp[col] * max(0.0, excess) / width
+    total = sum(contrib.values())
+    top = []
+    if total > 0:
+        for col, c in sorted(contrib.items(), key=lambda kv: -kv[1])[:3]:
+            if c <= 0:
+                break
+            lo, hi = NORMAL_RANGE[col]
+            top.append({
+                "feature": col,
+                "label": FEATURE_LABEL[col],
+                "value": round(values[col], 3),
+                "normal_range": [lo, hi],
+                "share": round(float(c / total), 3),
+            })
+    return top, values
+
+
+def plain_english(tier: str, score: float, top: list, attack_type: str, recommended_action: str) -> str:
+    if top:
+        parts = []
+        for t in top:
+            lo, hi = t["normal_range"]
+            parts.append(f"{t['label']} {_fmt(t['value'])} (normal {_fmt(lo)}-{_fmt(hi)})")
+        indicators = "Main indicators: " + "; ".join(parts) + "."
+    else:
+        indicators = "All eight indicators are inside their normal range."
+    sensor = f" Sensor-reported attack type: {attack_type}." if attack_type and attack_type != 'normal' else ""
+    return f"{tier} tier, risk score {score:.3f}. {indicators}{sensor} Recommended action: {recommended_action}."
+
 def score_event(features: dict, context: dict | None = None) -> dict:
     """
     Score an event and return a risk classification.
@@ -127,10 +225,6 @@ def score_event(features: dict, context: dict | None = None) -> dict:
     
     # Named DataFrame preserves the column order models were trained with and
     # suppresses sklearn's "no valid feature names" warning.
-    _FEATURE_COLS = ['failed_logins', 'cpu_usage', 'memory_spike',
-                     'ehr_access_per_hour', 'lateral_movement_events',
-                     'data_export_volume_kb', 'access_time_deviation',
-                     'source_ip_reputation']
     feature_vec = pd.DataFrame([{col: features.get(col, 0.0) for col in _FEATURE_COLS}])
 
     probs = {}
@@ -159,8 +253,8 @@ def score_event(features: dict, context: dict | None = None) -> dict:
             ))
             # Add per-model jitter so models disagree slightly, which
             # produces a realistic confidence_interval value.
-            jitter = random.uniform(-0.06, 0.06)
-            i = max(0.0, min(1.0, intensity + jitter))
+            jitter = 0.0  # no invented disagreement between models
+            i = max(0.0, min(1.0, intensity))
 
             if attack_type in ['ransomware']:
                 probs[m] = {'Low': max(0.01, 0.05 - jitter), 'Medium': 0.10, 'High': min(0.99, 0.85 + jitter)}
@@ -197,15 +291,14 @@ def score_event(features: dict, context: dict | None = None) -> dict:
     damage_factor = DAMAGE.get(attack_type, 0.1)
     raw_score = raw * (0.5 + 0.5 * damage_factor)
     raw_score = raw_score * CRITICALITY.get(asset_type, 1.0)
-    # Per-event Gaussian jitter (σ=0.025) ensures no two events share the exact
-    # same score even if they arrive from the same IP with similar features.
-    raw_score = max(0.01, min(0.99, raw_score + random.gauss(0, 0.025)))
-    raw_score = min(raw_score, 0.99)
+    # Deterministic: the same features always give the same score, so the number shown on the
+    # dashboard can be reproduced and explained.
+    raw_score = max(0.01, min(0.99, raw_score))
     
     if features.get('failed_logins', 0) > 15 or attack_type in ['ransomware', 'exfiltration']:
         # High-tier floor with proportional feature scaling + unique jitter
         fl_bonus = min(0.04, features.get('failed_logins', 0) * 0.001)
-        raw_score = min(0.99, 0.82 + (raw_score * 0.12) + fl_bonus + random.gauss(0, 0.018))
+        raw_score = min(0.99, 0.82 + (raw_score * 0.12) + fl_bonus)
     elif attack_type in ['ddos', 'brute_force'] or (4 <= features.get('failed_logins', 0) <= 14):
         # Medium-tier floor — ensures these events consistently land above the 0.3 boundary
         # while still varying (σ=0.025 jitter keeps every event unique).
@@ -213,7 +306,7 @@ def score_event(features: dict, context: dict | None = None) -> dict:
         raw_score = min(0.68, max(
             THRESHOLDS['low_medium_boundary'] + 0.05 + fl_ratio * 0.30,
             raw_score
-        ) + random.gauss(0, 0.025))
+        ))
 
     # Apply Context Fusion modifier BEFORE tier assignment.
     # Legitimate clinical context (on-shift + badge) suppresses the score.
@@ -226,16 +319,15 @@ def score_event(features: dict, context: dict | None = None) -> dict:
     elif raw_score >= THRESHOLDS['low_medium_boundary']: tier = 'Medium'
     else: tier = 'Low'
 
-    # Apply within-tier jitter so every event has a unique score while staying
-    # inside the correct tier band (σ=0.022, clamped to tier boundaries).
-    _lo_med = THRESHOLDS['low_medium_boundary']   # 0.3
-    _med_hi = THRESHOLDS['medium_high_boundary']  # 0.7
+    # Keep the score inside its tier band (no random jitter).
+    _lo_med = THRESHOLDS['low_medium_boundary']
+    _med_hi = THRESHOLDS['medium_high_boundary']
     if tier == 'Low':
-        raw_score = max(0.01, min(_lo_med - 0.01, raw_score + random.gauss(0, 0.022)))
+        raw_score = max(0.01, min(_lo_med - 0.01, raw_score))
     elif tier == 'Medium':
-        raw_score = max(_lo_med + 0.01, min(_med_hi - 0.02, raw_score + random.gauss(0, 0.030)))
+        raw_score = max(_lo_med + 0.01, min(_med_hi - 0.02, raw_score))
     else:  # High
-        raw_score = max(_med_hi + 0.01, min(0.99, raw_score + random.gauss(0, 0.020)))
+        raw_score = max(_med_hi + 0.01, min(0.99, raw_score))
 
     context_suppressed_escalation = False
 
@@ -253,7 +345,7 @@ def score_event(features: dict, context: dict | None = None) -> dict:
     if dissent_flag and tier == 'Low':
         if not has_legitimate_context:
             tier = 'Medium'
-            raw_score = max(raw_score, THRESHOLDS['low_medium_boundary'] + random.uniform(0.01, 0.12))
+            raw_score = max(raw_score, THRESHOLDS['low_medium_boundary'] + 0.05)
         else:
             context_suppressed_escalation = True
             
@@ -267,20 +359,20 @@ def score_event(features: dict, context: dict | None = None) -> dict:
     if velocity_escalation and tier != 'High':
         tier = 'Medium' if tier == 'Low' else 'High'
         if tier == 'Medium':
-            raw_score = max(raw_score, THRESHOLDS['low_medium_boundary'] + random.uniform(0.01, 0.12))
+            raw_score = max(raw_score, THRESHOLDS['low_medium_boundary'] + 0.05)
         elif tier == 'High':
-            raw_score = max(raw_score, THRESHOLDS['medium_high_boundary'] + random.uniform(0.01, 0.12))
+            raw_score = max(raw_score, THRESHOLDS['medium_high_boundary'] + 0.05)
         
     high_probs = [probs[m]['High'] for m in current_weights]
     confidence_interval = float(np.std(high_probs))
     
-    top_3_features = ["failed_logins: 0.15", "cpu_usage: 0.12", "ehr_access_per_hour: 0.09"]
-    
     if tier == 'Low': recommended_action = "log_only"
     elif tier == 'Medium': recommended_action = "restrict_and_alert"
     else: recommended_action = "throttle_and_await_human"
-    
-    plain_english_explanation = f"Tier {tier} threat detected. Top indicators: failed_logins (0.150), cpu_usage (0.120), ehr_access_per_hour (0.090). Risk score: {raw_score:.3f}. Recommended action: {recommended_action}."
+
+    top_features, feature_values = explain_event(features)
+    top_3_features = [f"{t['feature']}: {t['share']:.2f}" for t in top_features]  # legacy string form
+    plain_english_explanation = plain_english(tier, raw_score, top_features, attack_type, recommended_action)
     
     timestamp = datetime.now(timezone.utc).isoformat()
     
@@ -304,6 +396,8 @@ def score_event(features: dict, context: dict | None = None) -> dict:
         "attack_type": attack_type,
         "asset_type": asset_type,
         "top_3_features": top_3_features,
+        "top_features": top_features,
+        "feature_values": feature_values,
         "plain_english_explanation": plain_english_explanation,
         "recommended_action": recommended_action,
         "audit_hash": last_audit_hash,

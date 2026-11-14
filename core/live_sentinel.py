@@ -574,6 +574,11 @@ def run_live_sentinel():
                     # SHAP chart filename only (no path prefix) so dashboard can
                     # serve it via /api/shap/<filename> behind the auth gate.
                     "shap_file": os.path.basename(shap_path) if shap_path else "",
+                    # Shown in the dashboard's "Why this score" panel.
+                    "attack_type": result.get('attack_type', 'normal'),
+                    "top_features": result.get('top_features', []),
+                    "feature_values": result.get('feature_values', {}),
+                    "model_disagreement": round(float(result.get('confidence_interval', 0.0)), 4),
                 }
                 flog.write(json.dumps(log_entry) + "\n")
 
@@ -594,7 +599,7 @@ def run_live_sentinel():
                         tier=result['tier'],
                         score=result['raw_score'],
                         mode=mirage_mode,
-                        top_features=[result.get('plain_english_explanation', '')],
+                        top_features=result.get('top_3_features') or [result.get('plain_english_explanation', '')],
                     )
                 except Exception:
                     pass

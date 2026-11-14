@@ -44,6 +44,7 @@ function MapShell({ children, count }: { children: ReactNode; count: number }) {
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
           Attacker IP Geolocation
+          <span className="ml-2 normal-case tracking-normal opacity-70">(approximate: offline prefix lookup, no external service)</span>
         </h2>
         <span className="text-xs text-muted-foreground">
           Total IPs Plotted: <span className="font-mono-sec text-foreground">{count}</span>
