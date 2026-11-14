@@ -9,6 +9,7 @@ import {
   BarChart, Bar, XAxis, YAxis, LabelList,
 } from "recharts";
 import { useSentinel, useMLMetrics, authHeaders, formatMTTR, type Tier, type Action, type MLMetricRow } from "@/lib/sentinel-data";
+import { apiFetch, apiUrl, isDemoMode, exitDemoMode } from "@/lib/api";
 import { Link } from "@tanstack/react-router";
 import { toast, Toaster } from "sonner";
 
@@ -33,7 +34,7 @@ function useHighTierSSE() {
     /** Inline YES/NO respond — used by the toast buttons */
     const respondInline = async (incidentId: string, decision: "YES" | "DENY") => {
       try {
-        const res = await fetch(`/api/alerts/${incidentId}/respond`, {
+        const res = await apiFetch(`/api/alerts/${incidentId}/respond`, {
           method: "POST",
           headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
           body: JSON.stringify({ decision }),
@@ -51,7 +52,7 @@ function useHighTierSSE() {
       }
     };
 
-    const es = new EventSource(`/api/stream?token=${encodeURIComponent(token)}`);
+    const es = new EventSource(apiUrl(`/api/stream?token=${encodeURIComponent(token)}`));
 
     es.addEventListener("high_alert", (e: MessageEvent) => {
       try {
@@ -426,6 +427,7 @@ function TopBar({
         <button
           onClick={() => {
             sessionStorage.removeItem("auth_token");
+            exitDemoMode();
             window.location.href = "/";
           }}
           className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
@@ -557,7 +559,7 @@ function ShapModal({ url, ip, onClose }: { url: string; ip: string; onClose: () 
 
   useEffect(() => {
     if (!url) return;
-    fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+    apiFetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
       .then((r) => {
         if (!r.ok) throw new Error("not found");
         return r.blob();
@@ -1129,22 +1131,21 @@ const DEMO_CHALLENGES: PendingChallenge[] = [
   {
     incident_id: "INC-94812",
     timestamp: new Date().toISOString().replace("T", " ").slice(0, 19),
-    prompt: "High-Tier Threat detected from 185.220.101.5 — Brute Force Authentication & SQL Injection on Patient EHR Database. Approve full containment & forensic report?",
-    attacker_ip: "185.220.101.5",
-    score: 0.942,
-    threat_tier: "High",
+    prompt_summary: "High-Tier Threat detected from 185.220.101.5 — Brute Force Authentication & SQL Injection on Patient EHR Database. Approve full containment & forensic report?",
+    resolved: false,
     timeout_sec: 90,
+    metadata: { ip: "185.220.101.5", tier: "High", score: 0.942 },
   },
 ];
 
 function AdminAlerts() {
-  const [challenges, setChallenges] = useState<PendingChallenge[]>(DEMO_CHALLENGES);
+  const [challenges, setChallenges] = useState<PendingChallenge[]>(() => (isDemoMode() ? DEMO_CHALLENGES : []));
   const [recentAlerts, setRecentAlerts] = useState<AlertLogEntry[]>([]);
   const [deciding, setDeciding] = useState<Record<string, boolean>>({});
 
   const fetchAlerts = async () => {
     try {
-      const res = await fetch("/api/alerts", { headers: authHeaders() });
+      const res = await apiFetch("/api/alerts", { headers: authHeaders() });
       if (!res.ok) return;
       const data = await res.json();
       if (Array.isArray(data.pending_challenges)) {
@@ -1165,7 +1166,7 @@ function AdminAlerts() {
   const respond = async (incidentId: string, decision: "YES" | "DENY") => {
     setDeciding((d) => ({ ...d, [incidentId]: true }));
     try {
-      const res = await fetch(`/api/alerts/${incidentId}/respond`, {
+      const res = await apiFetch(`/api/alerts/${incidentId}/respond`, {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({ decision }),
@@ -1355,7 +1356,7 @@ function StasisPanel() {
 
   const fetchStasis = async () => {
     try {
-      const res = await fetch("/api/alerts/stasis", { headers: authHeaders() });
+      const res = await apiFetch("/api/alerts/stasis", { headers: authHeaders() });
       if (!res.ok) return;
       const d = await res.json();
       setItems(d.stasis ?? []);
@@ -1371,7 +1372,7 @@ function StasisPanel() {
   useEffect(() => {
     const token = sessionStorage.getItem("auth_token");
     if (!token) return;
-    const es = new EventSource(`/api/stream?token=${encodeURIComponent(token)}`);
+    const es = new EventSource(apiUrl(`/api/stream?token=${encodeURIComponent(token)}`));
     es.addEventListener("stasis_resolved", () => fetchStasis());
     return () => es.close();
   }, []);
@@ -1379,7 +1380,7 @@ function StasisPanel() {
   const act = async (incidentId: string, action: "release" | "confirm") => {
     setActing((a) => ({ ...a, [incidentId]: true }));
     try {
-      const res = await fetch(`/api/alerts/${incidentId}/retroactive`, {
+      const res = await apiFetch(`/api/alerts/${incidentId}/retroactive`, {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({ action }),
@@ -1692,7 +1693,7 @@ function PendingUsers() {
 
   const fetchUsers = async () => {
     try {
-      const res = await fetch("/api/admin/users", { headers: authHeaders() });
+      const res = await apiFetch("/api/admin/users", { headers: authHeaders() });
       if (!res.ok) return;
       const data: AdminUser[] = await res.json();
       setUsers(data.filter((u) => u.status === "pending"));
@@ -1708,7 +1709,7 @@ function PendingUsers() {
   const act = async (username: string, action: "approve" | "reject") => {
     setActing((a) => ({ ...a, [username]: true }));
     try {
-      await fetch(`/api/admin/users/${username}/${action}`, {
+      await apiFetch(`/api/admin/users/${username}/${action}`, {
         method: "POST",
         headers: authHeaders(),
       });
@@ -1770,11 +1771,14 @@ export function Dashboard() {
   // Real-time SSE — shows a toast the moment a High-tier challenge arrives
   useHighTierSSE();
 
+  const [demo, setDemo] = useState(false);
+
   useEffect(() => {
     const token = sessionStorage.getItem("auth_token");
-    if (!token) {
+    if (!token && !isDemoMode()) {
       window.location.href = "/";
     } else {
+      setDemo(!token && isDemoMode());
       setAuthorized(true);
       setIsAdmin(sessionStorage.getItem("is_admin") === "1");
     }
@@ -1824,6 +1828,22 @@ export function Dashboard() {
     <div className="flex min-h-screen bg-background">
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
+        {demo && (
+          <div className="flex flex-wrap items-center justify-center gap-3 border-b border-warn/40 bg-warn/15 px-4 py-2 text-center text-[12.5px] font-semibold text-warn">
+            <span>DEMO MODE: simulated threats, not connected to the SentiHealth security server.</span>
+            <button
+              type="button"
+              onClick={() => {
+                exitDemoMode();
+                sessionStorage.clear();
+                window.location.href = "/";
+              }}
+              className="rounded-md border border-warn/50 px-2 py-0.5 text-[11.5px] hover:bg-warn/20"
+            >
+              Exit demo
+            </button>
+          </div>
+        )}
         <TopBar lastUpdated={snap.lastUpdated} autoRefresh={autoRefresh} setAutoRefresh={setAutoRefresh} />
         <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-6 sm:px-6 lg:px-10">
           {/* row 1 */}

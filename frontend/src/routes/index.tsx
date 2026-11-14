@@ -1,6 +1,7 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { motion, AnimatePresence } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { apiFetch, enterDemoMode, exitDemoMode, isJsonResponse } from "@/lib/api";
 import {
   ShieldCheck,
   Activity,
@@ -165,7 +166,6 @@ function ShieldLogo({ className = "h-12 w-12" }: { className?: string }) {
   );
 }
 
-const VALID_OTP = "123456";
 const CURRENT_IP = "198.51.100.22"; // simulated current request IP
 const SESSION_KNOWN_IP_KEY = "sentihealth.knownIP";
 
@@ -187,6 +187,7 @@ type Stage = "login" | "otp" | "granted" | "suspended";function LoginPage() {
   const [isAdminFlow, setIsAdminFlow] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [regSuccessMsg, setRegSuccessMsg] = useState("");
+  const [backendDown, setBackendDown] = useState(false);
 
   const isLocked = lockUntil !== null && now < lockUntil;
   const lockRemaining = isLocked ? Math.ceil((lockUntil! - now) / 1000) : 0;
@@ -220,61 +221,70 @@ type Stage = "login" | "otp" | "granted" | "suspended";function LoginPage() {
     setErrorMsg(null);
     setRegSuccessMsg("");
 
-    if (tab === "register") {
-      try {
-        const response = await fetch("/api/auth/register", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ username: adminId.trim(), password: securityKey.trim() })
-        });
-        const data = await response.json();
-        if (response.ok && data.success) {
-          setLoading(false);
-          setRegSuccessMsg(data.message || "Registration request submitted!");
-          pushLog("INFO", `Registration request submitted for "${adminId.trim()}". Awaiting approval.`);
-          setAdminId("");
-          setSecurityKey("");
-          return;
-        }
-      } catch {}
-      setLoading(false);
-      setRegSuccessMsg("Registration request submitted! Awaiting administrator approval.");
-      pushLog("INFO", `Registration request submitted for "${adminId.trim()}".`);
-      setAdminId("");
-      setSecurityKey("");
-    } else {
-      // Login mode
-      try {
-        const response = await fetch("/api/auth/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ username: adminId.trim(), password: securityKey.trim() })
-        });
-        if (response.ok) {
-          const data = await response.json();
-          if (data.success) {
-            setLoading(false);
-            pushLog("INFO", `Credentials accepted for "${adminId.trim()}".`);
-            setLoginUsername(adminId.trim());
-            setIsAdminFlow(data.is_admin);
-            setStage("otp");
-            return;
-          }
-        }
-      } catch {}
+    // Only the backend decides who gets in. If it cannot be reached, say so and offer the labelled demo.
+    let response: Response;
+    try {
+      response = await apiFetch(tab === "register" ? "/api/auth/register" : "/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: adminId.trim(), password: securityKey.trim() }),
+      });
+    } catch {
+      response = new Response(null, { status: 503 });
+    }
+    setLoading(false);
 
-      // Immediate standalone authentication fallback
-      setLoading(false);
+    if (!isJsonResponse(response)) {
+      setBackendDown(true);
+      setErrorMsg("Cannot reach the SentiHealth security server.");
+      pushLog("ALERT", "Security server offline or unreachable.");
+      return;
+    }
+    setBackendDown(false);
+    const data = await response.json().catch(() => ({}));
+
+    if (tab === "register") {
+      if (response.ok && data.success) {
+        setRegSuccessMsg(data.message || "Registration request submitted!");
+        pushLog("INFO", `Registration request submitted for "${adminId.trim()}". Awaiting approval.`);
+        setAdminId("");
+        setSecurityKey("");
+      } else {
+        setErrorMsg(data.message || "Registration failed.");
+        pushLog("WARN", `Registration failed for "${adminId.trim()}".`);
+      }
+      return;
+    }
+
+    if (response.ok && data.success) {
+      exitDemoMode();
       pushLog("INFO", `Credentials accepted for "${adminId.trim()}".`);
       setLoginUsername(adminId.trim());
-      setIsAdminFlow(adminId.trim().toLowerCase() === "admin");
+      setIsAdminFlow(!!data.is_admin);
       setStage("otp");
-      if (adminId.trim().toLowerCase() === "admin") {
-        pushLog("WARN", "Risk-adaptive MFA active: Enter any 6-digit OTP (e.g. 123456) to proceed.");
-      } else {
-        pushLog("INFO", "Approved context. Enter access code.");
-      }
+      pushLog(
+        data.is_admin ? "WARN" : "INFO",
+        data.is_admin
+          ? "Admin MFA: enter the authenticator code or the OTP shown on the server console."
+          : "Approved context. Enter your access code.",
+      );
+      return;
     }
+
+    setErrorMsg(data.message || "Invalid username or password.");
+    pushLog("WARN", `Failed login attempt for "${adminId.trim()}".`);
+    const newFailed = failedCount + 1;
+    setFailedCount(newFailed);
+    if (newFailed >= 3) {
+      setLockUntil(Date.now() + 30000);
+      pushLog("ALERT", "Multiple failed login attempts. Login temporarily locked.");
+    }
+  };
+
+  const openDemo = () => {
+    enterDemoMode();
+    pushLog("WARN", "Demo mode: simulated data, not connected to the security server.");
+    router.navigate({ to: "/dashboard" });
   };
 
   return (
@@ -396,6 +406,16 @@ type Stage = "login" | "otp" | "granted" | "suspended";function LoginPage() {
                     <AlertTriangle className="h-4 w-4 shrink-0" />
                     <span>{errorMsg}</span>
                   </motion.div>
+                )}
+
+                {backendDown && (
+                  <button
+                    type="button"
+                    onClick={openDemo}
+                    className="w-full rounded-xl border border-warn/40 bg-warn/10 px-4 py-3 text-[12.5px] font-semibold text-warn transition-colors hover:bg-warn/20"
+                  >
+                    Open demo instead (simulated data, no real login)
+                  </button>
                 )}
 
                 {regSuccessMsg && (
@@ -615,21 +635,21 @@ function EmergencyOtpCard({
     setError(null);
 
     try {
-      const response = await fetch("/api/auth/verify-otp", {
+      const response = await apiFetch("/api/auth/verify-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, code })
       });
-      const data = await response.json();
       setVerifying(false);
-
-      if (response.ok && data.success) {
-        onSuccess(data.token, !!data.is_admin);
+      if (!isJsonResponse(response)) {
+        setError("MFA server unreachable.");
         return;
       }
+      const data = await response.json();
 
-      if (!response.ok || code.length === 6) {
-        onSuccess("sentinel_token_" + Date.now(), isAdmin);
+      // Only a token issued by the backend opens the dashboard.
+      if (response.ok && data.success && data.token) {
+        onSuccess(data.token, !!data.is_admin);
         return;
       }
 
@@ -644,13 +664,8 @@ function EmergencyOtpCard({
 
       const remaining = 3 - next;
       setError(data.message || `Incorrect code. ${remaining} attempt${remaining === 1 ? "" : "s"} remaining.`);
-    } catch (err) {
+    } catch {
       setVerifying(false);
-      // Seamless cloud demo fallback
-      if (code.length === 6) {
-        onSuccess("sentinel_token_" + Date.now(), isAdmin);
-        return;
-      }
       setError("MFA server unreachable.");
     }
   };

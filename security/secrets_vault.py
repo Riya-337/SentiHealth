@@ -16,7 +16,7 @@ import sys
 import secrets
 from datetime import datetime, timezone
 
-_HERE = os.path.dirname(os.path.abspath(__file__))
+_HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # project root (this file is in security/)
 if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
 

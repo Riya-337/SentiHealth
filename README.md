@@ -185,13 +185,11 @@ unisyshealth/
 │   ├── constitution.md      # Project constitution and design principles
 │   ├── trd.md               # Technical requirements document
 │   └── ...                  # Additional design and demo docs
-├── live_sentinel.py         # Core log-tailing sentinel with feature engineering
-├── model_trainer.py         # 5-model ensemble training with calibration + poison guard
-├── self_healing_responder.py# Tiered automated response engine
-├── scoring_matrix.py        # Threat scoring and tier classification logic
-├── dashboard.py             # Real-time Flask dashboard (port 5001)
-├── review_queue.py          # Human-in-the-loop retraining queue
-├── database.py              # SQLite / PostgreSQL schema init and DB manager
+├── api/dashboard.py         # Real-time Flask dashboard backend (port 5001)
+├── core/                    # live_sentinel.py, self_healing_responder.py, review_queue.py,
+│                            # context.py, local_notifier_client.py
+├── ml/                      # model_trainer.py, scoring_matrix.py, data_generator.py
+├── security/                # database.py (SQLite / PostgreSQL), secrets_vault.py
 ├── _paths.py                # Single source of truth for all filesystem paths
 ├── requirements.txt
 └── LICENSE
@@ -224,7 +222,7 @@ export DATABASE_URL="postgresql://sentiuser:sentipass@localhost:5432/sentihealth
 Only needed on first run or after dataset changes:
 
 ```bash
-python3 model_trainer.py
+python3 ml/model_trainer.py
 ```
 
 ### 3. Start the System
@@ -234,27 +232,27 @@ Open **6 separate terminal windows** and run in order:
 **Terminal 1 — Database & EHR Web App**
 ```bash
 source .venv/bin/activate
-python3 database.py            # Initialize schema and tables
+python3 security/database.py   # Initialize schema and tables
 cd webapp && node app.js       # EHR web app on port 3000
 ```
 
 **Terminal 2 — Flask Dashboard Backend**
 ```bash
 source .venv/bin/activate
-python3 dashboard.py           # Admin dashboard on http://localhost:5001
+python3 api/dashboard.py       # Admin dashboard on http://localhost:5001
 ```
-> **First-time setup:** Log in with `admin` / `adminpass123`, immediately change the password, scan the TOTP QR code into Google Authenticator or Authy, and save the 8 emergency backup codes.
+> **First-time setup:** On first start the backend creates `data/users.json`, `config/.secrets_vault.json` and the admin account, and prints the admin's TOTP secret and 8 backup codes in this terminal. Log in with `admin` / `adminpass123`, change the password, add the TOTP secret to Google Authenticator or Authy, and save the backup codes. These files hold secrets and are git-ignored: never commit them.
 
 **Terminal 3 — Local Desktop Alert Client**
 ```bash
 source .venv/bin/activate
-python3 local_notifier_client.py   # Receives High-tier alerts via SSE (/api/stream)
+python3 core/local_notifier_client.py   # Receives High-tier alerts via SSE (/api/stream)
 ```
 
 **Terminal 4 — Live Sentinel AI Engine**
 ```bash
 source .venv/bin/activate
-python3 live_sentinel.py       # Tails event logs, scores with 5-model ensemble
+python3 core/live_sentinel.py  # Tails event logs, scores with 5-model ensemble
 ```
 
 **Terminal 5 — React Frontend UI** *(optional)*
@@ -279,6 +277,16 @@ To reset all state before a demo session:
 bash scripts/reset_and_run.sh
 ```
 This runs a pre-flight checklist (Python version, Node.js, `.env`, virtual env, model files) and clears ephemeral state.
+
+### Deploying the frontend on Vercel
+
+The Vercel site is only the frontend. The Flask backend still runs on your machine and is reached through a tunnel:
+
+1. Create a free ngrok account, then `export NGROK_AUTHTOKEN=...` and (recommended) `export NGROK_DOMAIN=<your free static domain>.ngrok-free.app`.
+2. Start the backend: `python3 api/dashboard.py`. It prints the public backend URL.
+3. In the Vercel project (Root Directory: `frontend`), set the environment variable `VITE_API_BASE_URL` to that URL and redeploy.
+
+If the backend is not running, the login page says the server is unreachable and offers a clearly labelled demo with simulated data. Nobody can log in without the backend.
 
 ---
 

@@ -40,7 +40,7 @@ from typing import Any
 # Roster / badge / proxy data paths (all optional — graceful fallback)
 # ---------------------------------------------------------------------------
 
-_BASE = os.path.dirname(os.path.abspath(__file__))
+_BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # project root (this file is in core/)
 _ROSTER_PATH    = os.path.join(_BASE, 'config', 'staff_roster.json')
 _BADGE_PATH     = os.path.join(_BASE, 'config', 'badge_events.json')
 _PROXY_PATH     = os.path.join(_BASE, 'config', 'registered_proxies.json')

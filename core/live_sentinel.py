@@ -10,7 +10,7 @@ import collections
 
 # Ensure project root is in sys.path so sibling modules resolve correctly
 # when this file is imported or run from any working directory.
-_PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # this file lives one level below the root
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 

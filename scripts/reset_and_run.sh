@@ -119,7 +119,7 @@ if ls models/*.pkl &>/dev/null 2>&1; then
   MODEL_COUNT=$(ls models/*.pkl | wc -l | tr -d ' ')
   ok "ML models found ($MODEL_COUNT .pkl files)"
 else
-  fail "No ML model files found in models/ — run: python3 model_trainer.py"
+  fail "No ML model files found in models/ — run: python3 ml/model_trainer.py"
 fi
 
 # Stop if pre-flight failed
@@ -176,11 +176,11 @@ echo -e "  ${CYAN}cd ~/sentiHealth/webapp && node app.js${RESET}"
 echo -e "  ${YELLOW}→ Wait for: 'SentiHealth EHR server running on port 3000'${RESET}"
 echo ""
 echo -e "${BOLD}  TERMINAL 2 — Python AI Watchdog (core detection engine)${RESET}"
-echo -e "  ${CYAN}cd ~/sentiHealth && source .venv/bin/activate && export SENTIHEALTH_TEST_MODE=1 && python3 live_sentinel.py${RESET}"
+echo -e "  ${CYAN}cd ~/sentiHealth && source .venv/bin/activate && export SENTIHEALTH_TEST_MODE=1 && python3 core/live_sentinel.py${RESET}"
 echo -e "  ${YELLOW}→ Wait for: 'TELEGRAM CONNECTED. Waiting for live web traffic...'${RESET}"
 echo ""
 echo -e "${BOLD}  TERMINAL 3 — Flask API Dashboard (backend API)${RESET}"
-echo -e "  ${CYAN}cd ~/sentiHealth && source .venv/bin/activate && python3 dashboard.py${RESET}"
+echo -e "  ${CYAN}cd ~/sentiHealth && source .venv/bin/activate && python3 api/dashboard.py${RESET}"
 echo -e "  ${YELLOW}→ Wait for: '[DASHBOARD] Running at http://localhost:5001'${RESET}"
 echo ""
 echo -e "${BOLD}  TERMINAL 4 — React Frontend (Lovable UI with login)${RESET}"

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { apiFetch, apiUrl, isDemoMode } from "@/lib/api";
 
 export type Tier = "High" | "Medium" | "Low";
 export type Action = "pending" | "resolved" | "auto-locked" | "forensics_generated" | "denied" | "blocked" | "admin_released";
@@ -270,24 +271,33 @@ function authHeaders(): HeadersInit {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-export function useSentinel(autoRefresh = true): SentinelSnapshot {
-  const [snap, setSnap] = useState<SentinelSnapshot>(FALLBACK);
+const EMPTY: SentinelSnapshot = buildSnapshotFromEvents([], "NORMAL", "INTACT", 0);
 
-  const snapRef = useRef<SentinelSnapshot>(FALLBACK);
+export function useSentinel(autoRefresh = true): SentinelSnapshot {
+  // Simulated events are used only in the explicit demo mode, never as a stand-in for a real session.
+  const [snap, setSnap] = useState<SentinelSnapshot>(() => (isDemoMode() ? FALLBACK : EMPTY));
+
+  const snapRef = useRef<SentinelSnapshot>(snap);
   snapRef.current = snap;
 
   const fetchSnap = useCallback(async () => {
-    try {
-      const res = await fetch("/api/status", { headers: authHeaders() });
-      if (res.status === 401) {
-        if (typeof window !== "undefined") window.location.href = "/";
-        return;
+    if (!isDemoMode()) {
+      try {
+        const res = await apiFetch("/api/status", { headers: authHeaders() });
+        if (res.status === 401) {
+          if (typeof window !== "undefined") window.location.href = "/";
+          return;
+        }
+        if (!res.ok) return;
+        const data = await res.json();
+        setSnap(buildSnapshot(data));
+      } catch {
+        // Backend unreachable: keep the last real snapshot rather than inventing events.
       }
-      if (!res.ok) return;
-      const data = await res.json();
-      setSnap(buildSnapshot(data));
-    } catch {
-      // Flask offline — simulate live periodic sentinel ticker
+      return;
+    }
+    {
+      // Demo mode: simulated periodic sentinel ticker
       const randomIP = IP_GEO[Math.floor(Math.random() * IP_GEO.length)];
       const isHigh = Math.random() > 0.65;
       const tier: Tier = isHigh ? "High" : Math.random() > 0.5 ? "Medium" : "Low";
@@ -331,7 +341,7 @@ export function useSentinel(autoRefresh = true): SentinelSnapshot {
 
     if (!token) return;
 
-    const es = new EventSource(`/api/stream?token=${encodeURIComponent(token)}`);
+    const es = new EventSource(apiUrl(`/api/stream?token=${encodeURIComponent(token)}`));
 
     es.addEventListener("threat_update", (e: MessageEvent) => {
       try {
@@ -384,13 +394,15 @@ export function useSentinel(autoRefresh = true): SentinelSnapshot {
 
 export { authHeaders };
 
+// Shown until /api/metrics answers. Copied from evaluation/evaluation_metrics.json (rounded to 4 places),
+// so the offline table shows the stored results, not invented ones. Update both together.
 const DEMO_ML_METRICS: MLMetricRow[] = [
-  { model: "ENSEMBLE (Weighted 5-Model)", accuracy: 0.988, precision: 0.985, recall: 0.991, f1: 0.988, auc: 0.996, ensemble: true },
-  { model: "XGB (XGBoost)", accuracy: 0.976, precision: 0.972, recall: 0.980, f1: 0.976, auc: 0.991 },
-  { model: "RF (Random Forest)", accuracy: 0.971, precision: 0.968, recall: 0.974, f1: 0.971, auc: 0.987 },
-  { model: "GB (Gradient Boosting)", accuracy: 0.965, precision: 0.961, recall: 0.969, f1: 0.965, auc: 0.982 },
-  { model: "SVM (Support Vector Machine)", accuracy: 0.942, precision: 0.938, recall: 0.946, f1: 0.942, auc: 0.964 },
-  { model: "LR (Logistic Regression)", accuracy: 0.915, precision: 0.910, recall: 0.920, f1: 0.915, auc: 0.938 },
+  { model: "ENSEMBLE (weighted)", accuracy: 0.9722, precision: 0.973, recall: 0.9722, f1: 0.9724, auc: 0.9997, ensemble: true },
+  { model: "XGB (XGBoost)", accuracy: 0.9587, precision: 0.9612, recall: 0.9587, f1: 0.9594, auc: 0.9918 },
+  { model: "GB (Gradient Boosting)", accuracy: 0.9404, precision: 0.9457, recall: 0.9404, f1: 0.9418, auc: 0.9911 },
+  { model: "LR (Logistic Regression)", accuracy: 0.9349, precision: 0.9413, recall: 0.9349, f1: 0.9366, auc: 0.9958 },
+  { model: "RF (Random Forest)", accuracy: 0.9341, precision: 0.9412, recall: 0.9341, f1: 0.9359, auc: 0.9986 },
+  { model: "SVM (Support Vector Machine)", accuracy: 0.9214, precision: 0.9319, recall: 0.9214, f1: 0.924, auc: 0.9702 },
 ];
 
 export function useMLMetrics(): MLMetricRow[] {
@@ -406,7 +418,7 @@ export function useMLMetrics(): MLMetricRow[] {
   };
 
   useEffect(() => {
-    fetch("/api/metrics", { headers: authHeaders() })
+    apiFetch("/api/metrics", { headers: authHeaders() })
       .then((r) => r.json())
       .then((data: { model: string; accuracy: number; precision: number; recall: number; f1: number; auc_roc: number }[]) => {
         if (Array.isArray(data) && data.length > 0) {

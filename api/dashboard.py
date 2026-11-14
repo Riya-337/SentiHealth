@@ -29,7 +29,7 @@ from datetime import datetime, timezone
 
 # Ensure project root is on sys.path so _paths and sibling modules are importable
 # from any working directory the user launches this script from.
-_PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # this file lives one level below the root
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
@@ -314,7 +314,7 @@ def init_db():
         }
         save_users(users)
         print(
-            f"\n[AUTH] Default admin created (username: admin  password: sentinel2026)\n"
+            f"\n[AUTH] Default admin created (username: admin  password: adminpass123 -- change it)\n"
             f"  TOTP Secret Key       : {totp_secret}\n"
             f"  Backup Recovery Codes : {', '.join(raw_codes)}\n",
             flush=True,
@@ -709,9 +709,10 @@ def api_status():
 @app.route("/api/metrics")
 @_require_auth()
 def api_metrics():
-    if not os.path.exists("evaluation_metrics.json"):
+    metrics_file = _p("evaluation", "evaluation_metrics.json")
+    if not os.path.exists(metrics_file):
         return jsonify([])
-    with open("evaluation_metrics.json", "r") as f:
+    with open(metrics_file, "r") as f:
         return jsonify(json.load(f))
 
 
@@ -1393,14 +1394,20 @@ if __name__ == "__main__":
         if _ngrok_token:
             _ngrok_conf.get_default().auth_token = _ngrok_token
 
-        _tunnel = _ngrok_lib.connect(5001, "http")
+        # NGROK_DOMAIN: the free static domain from the ngrok dashboard (e.g. my-name.ngrok-free.app).
+        # With it the public URL never changes, so the Vercel VITE_API_BASE_URL setting stays valid.
+        _ngrok_domain = os.environ.get("NGROK_DOMAIN", "").strip()
+        if _ngrok_domain:
+            _tunnel = _ngrok_lib.connect(5001, "http", domain=_ngrok_domain)
+        else:
+            _tunnel = _ngrok_lib.connect(5001, "http")
         _ngrok_url = _tunnel.public_url
 
         _log_to_file(f"[NGROK] Public URL: {_ngrok_url}")
         print(f"\n{'='*60}", flush=True)
-        print(f"  🌐  Dashboard public URL:", flush=True)
+        print(f"  🌐  Backend public URL:", flush=True)
         print(f"      {_ngrok_url}", flush=True)
-        print(f"  Open this on any device to access the dashboard.", flush=True)
+        print(f"  Set VITE_API_BASE_URL={_ngrok_url} in the Vercel project, then redeploy.", flush=True)
         print(f"{'='*60}\n", flush=True)
 
         try:
@@ -1412,7 +1419,9 @@ if __name__ == "__main__":
         except Exception:
             pass
 
+    except ImportError:
+        print("[NGROK] pyngrok not installed -- backend reachable on this network only (pip install pyngrok).", flush=True)
     except Exception as _ngrok_err:
-        pass
+        print(f"[NGROK] Tunnel not started: {_ngrok_err}", flush=True)
 
     app.run(port=5001, debug=False, host="0.0.0.0")

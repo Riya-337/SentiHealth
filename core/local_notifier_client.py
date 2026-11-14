@@ -46,7 +46,7 @@ def trigger_desktop_notification(title: str, message: str, is_high: bool = True)
 
 def _get_verify_path() -> str | bool:
     """Return local CA certificate path if available, or True for standard bundle."""
-    crt = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config", "certs", "server.crt")
+    crt = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config", "certs", "server.crt")
     if os.path.exists(crt):
         return crt
     return True
