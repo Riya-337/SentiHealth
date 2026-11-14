@@ -48,3 +48,12 @@ logs_dashboard.txt
 logs_frontend.txt
 logs_sentinel.txt
 logs_webapp.txt
+
+# Secrets and per-install state: created on first run, never commit
+config/.secrets_vault.json
+config/certs/server.key
+config/certs/server.crt
+data/users.json
+data/users.json.bak
+data/.users.json.hmac
+data/audit_chain_replica.json
