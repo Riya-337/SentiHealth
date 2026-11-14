@@ -486,6 +486,8 @@ def run_live_sentinel():
                 processed_event_ids.add(event_id)
 
             features = event.get('features', {})
+            if features and event.get('timestamp') and 'timestamp' not in features:
+                features['timestamp'] = event['timestamp']   # the scorer uses the event's own time, not "now"
 
             if event.get('is_precomputed_feature'):
                 if not TEST_MODE:

@@ -1,0 +1,1150 @@
+{
+  "generated_at": "2026-11-14T18:10:04+00:00",
+  "data": "SYNTHETIC: ml/simulate_events.py (see its docstring); no real hospital traffic",
+  "test_period": {
+    "from": "2025-03-14 08:38:00+00:00",
+    "to": "2025-03-16 23:58:00+00:00",
+    "rows": 50130,
+    "tier_counts": {
+      "Low": 49568,
+      "Medium": 209,
+      "High": 353
+    }
+  },
+  "split": {
+    "train_end": "2025-03-12 12:45:00+00:00",
+    "val_end": "2025-03-14 08:38:00+00:00",
+    "n_train": 234065,
+    "n_val": 50156,
+    "n_test": 50187
+  },
+  "holdout_family": "credential_stuffing",
+  "versions": {
+    "python": "3.13.3",
+    "numpy": "2.4.4",
+    "pandas": "3.0.2",
+    "sklearn": "1.8.0",
+    "xgboost": "3.2.0"
+  },
+  "stealthy_families": [
+    "brute_force_slow",
+    "exfiltration_slow",
+    "insider_offhours"
+  ],
+  "systems": {
+    "XGBoost (calibrated)": {
+      "accuracy": 0.9992818671454219,
+      "precision_macro": 0.9683739009888579,
+      "recall_macro": 0.9797622872765085,
+      "f1_macro": 0.974016719967115,
+      "per_class": {
+        "Low": {
+          "precision": 0.9997376811009322,
+          "recall": 0.9995359909619109,
+          "f1": 0.999636825857999,
+          "support": 49568
+        },
+        "Medium": {
+          "precision": 0.9248826291079812,
+          "recall": 0.9425837320574163,
+          "f1": 0.933649289099526,
+          "support": 209
+        },
+        "High": {
+          "precision": 0.9805013927576601,
+          "recall": 0.9971671388101983,
+          "f1": 0.9887640449438202,
+          "support": 353
+        }
+      },
+      "confusion_matrix": [
+        [
+          49545,
+          16,
+          7
+        ],
+        [
+          12,
+          197,
+          0
+        ],
+        [
+          1,
+          0,
+          352
+        ]
+      ],
+      "high_recall": 0.9971671388101983,
+      "high_precision": 0.9805013927576601,
+      "roc_auc_ovr_macro": 0.9922461292898235,
+      "average_precision": {
+        "Low": 0.9998559111351832,
+        "Medium": 0.9233282497753887,
+        "High": 0.9879619705485091
+      },
+      "ece": 0.0005786876313213978,
+      "latency_ms_per_row_batch": 0.0045963325782043835,
+      "latency_ms_single_row": 0.932694673538208,
+      "families": {
+        "brute_force": {
+          "rows": 58,
+          "correct_tier_rate": 1.0,
+          "row_detection_rate": 1.0,
+          "campaigns": 6,
+          "campaign_detection_rate": 1.0
+        },
+        "brute_force_slow": {
+          "rows": 117,
+          "correct_tier_rate": 1.0,
+          "row_detection_rate": 1.0,
+          "campaigns": 1,
+          "campaign_detection_rate": 1.0
+        },
+        "ddos_mild": {
+          "rows": 27,
+          "correct_tier_rate": 1.0,
+          "row_detection_rate": 1.0,
+          "campaigns": 1,
+          "campaign_detection_rate": 1.0
+        },
+        "ddos_severe": {
+          "rows": 196,
+          "correct_tier_rate": 1.0,
+          "row_detection_rate": 1.0,
+          "campaigns": 1,
+          "campaign_detection_rate": 1.0
+        },
+        "exfiltration": {
+          "rows": 67,
+          "correct_tier_rate": 0.9850746268656716,
+          "row_detection_rate": 0.9850746268656716,
+          "campaigns": 2,
+          "campaign_detection_rate": 1.0
+        },
+        "insider_offhours": {
+          "rows": 65,
+          "correct_tier_rate": 0.8153846153846154,
+          "row_detection_rate": 0.8153846153846154,
+          "campaigns": 3,
+          "campaign_detection_rate": 1.0
+        },
+        "normal": {
+          "rows": 49553,
+          "correct_tier_rate": 0.9995358505035014,
+          "false_alarm_rate": 0.0007668556898674147,
+          "false_high_rate": 0.0004439690836074506
+        },
+        "ransomware": {
+          "rows": 17,
+          "correct_tier_rate": 1.0,
+          "row_detection_rate": 1.0,
+          "campaigns": 1,
+          "campaign_detection_rate": 1.0
+        },
+        "recon": {
+          "rows": 30,
+          "correct_tier_rate": 1.0,
+          "row_detection_rate": 0.0,
+          "campaigns": 2,
+          "campaign_detection_rate": 0.0
+        }
+      }
+    },
+    "XGBoost + cost policy": {
+      "accuracy": 0.9992020746060243,
+      "precision_macro": 0.9567359205123208,
+      "recall_macro": 0.987676246017189,
+      "f1_macro": 0.9716553219022052,
+      "per_class": {
+        "Low": {
+          "precision": 0.9998385273696109,
+          "recall": 0.9993544222078761,
+          "f1": 0.9995964161756397,
+          "support": 49568
+        },
+        "Medium": {
+          "precision": 0.8898678414096917,
+          "recall": 0.9665071770334929,
+          "f1": 0.926605504587156,
+          "support": 209
+        },
+        "High": {
+          "precision": 0.9805013927576601,
+          "recall": 0.9971671388101983,
+          "f1": 0.9887640449438202,
+          "support": 353
+        }
+      },
+      "confusion_matrix": [
+        [
+          49536,
+          25,
+          7
+        ],
+        [
+          7,
+          202,
+          0
+        ],
+        [
+          1,
+          0,
+          352
+        ]
+      ],
+      "high_recall": 0.9971671388101983,
+      "high_precision": 0.9805013927576601,
+      "roc_auc_ovr_macro": 0.9922461292898235,
+      "average_precision": {
+        "Low": 0.9998559111351832,
+        "Medium": 0.9233282497753887,
+        "High": 0.9879619705485091
+      },
+      "ece": 0.0005786876313213978,
+      "families": {
+        "brute_force": {
+          "rows": 58,
+          "correct_tier_rate": 1.0,
+          "row_detection_rate": 1.0,
+          "campaigns": 6,
+          "campaign_detection_rate": 1.0
+        },
+        "brute_force_slow": {
+          "rows": 117,
+          "correct_tier_rate": 1.0,
+          "row_detection_rate": 1.0,
+          "campaigns": 1,
+          "campaign_detection_rate": 1.0
+        },
+        "ddos_mild": {
+          "rows": 27,
+          "correct_tier_rate": 1.0,
+          "row_detection_rate": 1.0,
+          "campaigns": 1,
+          "campaign_detection_rate": 1.0
+        },
+        "ddos_severe": {
+          "rows": 196,
+          "correct_tier_rate": 1.0,
+          "row_detection_rate": 1.0,
+          "campaigns": 1,
+          "campaign_detection_rate": 1.0
+        },
+        "exfiltration": {
+          "rows": 67,
+          "correct_tier_rate": 0.9850746268656716,
+          "row_detection_rate": 0.9850746268656716,
+          "campaigns": 2,
+          "campaign_detection_rate": 1.0
+        },
+        "insider_offhours": {
+          "rows": 65,
+          "correct_tier_rate": 0.8923076923076924,
+          "row_detection_rate": 0.8923076923076924,
+          "campaigns": 3,
+          "campaign_detection_rate": 1.0
+        },
+        "normal": {
+          "rows": 49553,
+          "correct_tier_rate": 0.9993945876132626,
+          "false_alarm_rate": 0.000908118580106149,
+          "false_high_rate": 0.0004439690836074506
+        },
+        "ransomware": {
+          "rows": 17,
+          "correct_tier_rate": 1.0,
+          "row_detection_rate": 1.0,
+          "campaigns": 1,
+          "campaign_detection_rate": 1.0
+        },
+        "recon": {
+          "rows": 30,
+          "correct_tier_rate": 0.9333333333333333,
+          "row_detection_rate": 0.06666666666666667,
+          "campaigns": 2,
+          "campaign_detection_rate": 0.5
+        }
+      }
+    },
+    "Random Forest (single, calibrated) + cost policy": {
+      "accuracy": 0.9992220227408737,
+      "precision_macro": 0.9579091398392033,
+      "recall_macro": 0.9870323615173858,
+      "f1_macro": 0.9720187063460468,
+      "per_class": {
+        "Low": {
+          "precision": 0.9998385306287214,
+          "recall": 0.9993745965138799,
+          "f1": 0.9996065097414063,
+          "support": 49568
+        },
+        "Medium": {
+          "precision": 0.8933333333333333,
+          "recall": 0.9617224880382775,
+          "f1": 0.9262672811059908,
+          "support": 209
+        },
+        "High": {
+          "precision": 0.9805555555555555,
+          "recall": 1.0,
+          "f1": 0.9901823281907434,
+          "support": 353
+        }
+      },
+      "confusion_matrix": [
+        [
+          49537,
+          24,
+          7
+        ],
+        [
+          8,
+          201,
+          0
+        ],
+        [
+          0,
+          0,
+          353
+        ]
+      ],
+      "high_recall": 1.0,
+      "high_precision": 0.9805555555555555,
+      "roc_auc_ovr_macro": 0.9943859938377243,
+      "average_precision": {
+        "Low": 0.9998949829009044,
+        "Medium": 0.9064097385108216,
+        "High": 0.9857369653106611
+      },
+      "ece": 0.0005541482890993623,
+      "latency_ms_per_row_batch": 0.0027716147930541726,
+      "families": {
+        "brute_force": {
+          "rows": 58,
+          "correct_tier_rate": 1.0,
+          "row_detection_rate": 1.0,
+          "campaigns": 6,
+          "campaign_detection_rate": 1.0
+        },
+        "brute_force_slow": {
+          "rows": 117,
+          "correct_tier_rate": 1.0,
+          "row_detection_rate": 1.0,
+          "campaigns": 1,
+          "campaign_detection_rate": 1.0
+        },
+        "ddos_mild": {
+          "rows": 27,
+          "correct_tier_rate": 1.0,
+          "row_detection_rate": 1.0,
+          "campaigns": 1,
+          "campaign_detection_rate": 1.0
+        },
+        "ddos_severe": {
+          "rows": 196,
+          "correct_tier_rate": 1.0,
+          "row_detection_rate": 1.0,
+          "campaigns": 1,
+          "campaign_detection_rate": 1.0
+        },
+        "exfiltration": {
+          "rows": 67,
+          "correct_tier_rate": 1.0,
+          "row_detection_rate": 1.0,
+          "campaigns": 2,
+          "campaign_detection_rate": 1.0
+        },
+        "insider_offhours": {
+          "rows": 65,
+          "correct_tier_rate": 0.8769230769230769,
+          "row_detection_rate": 0.8769230769230769,
+          "campaigns": 3,
+          "campaign_detection_rate": 1.0
+        },
+        "normal": {
+          "rows": 49553,
+          "correct_tier_rate": 0.9993744072003713,
+          "false_alarm_rate": 0.0009282989929973967,
+          "false_high_rate": 0.0004439690836074506
+        },
+        "ransomware": {
+          "rows": 17,
+          "correct_tier_rate": 1.0,
+          "row_detection_rate": 1.0,
+          "campaigns": 1,
+          "campaign_detection_rate": 1.0
+        },
+        "recon": {
+          "rows": 30,
+          "correct_tier_rate": 1.0,
+          "row_detection_rate": 0.0,
+          "campaigns": 2,
+          "campaign_detection_rate": 0.0
+        }
+      }
+    },
+    "Rules only (deployed: failed logins)": {
+      "accuracy": 0.9920805904647916,
+      "precision_macro": 0.9758725784606618,
+      "recall_macro": 0.5587558904988456,
+      "f1_macro": 0.6509282214221612,
+      "per_class": {
+        "Low": {
+          "precision": 0.9921338644142431,
+          "recall": 1.0,
+          "f1": 0.9960514021039094,
+          "support": 49568
+        },
+        "Medium": {
+          "precision": 1.0,
+          "recall": 0.5119617224880383,
+          "f1": 0.6772151898734177,
+          "support": 209
+        },
+        "High": {
+          "precision": 0.9354838709677419,
+          "recall": 0.1643059490084986,
+          "f1": 0.27951807228915665,
+          "support": 353
+        }
+      },
+      "confusion_matrix": [
+        [
+          49568,
+          0,
+          0
+        ],
+        [
+          98,
+          107,
+          4
+        ],
+        [
+          295,
+          0,
+          58
+        ]
+      ],
+      "high_recall": 0.1643059490084986,
+      "high_precision": 0.9354838709677419,
+      "families": {
+        "brute_force": {
+          "rows": 58,
+          "correct_tier_rate": 1.0,
+          "row_detection_rate": 1.0,
+          "campaigns": 6,
+          "campaign_detection_rate": 1.0
+        },
+        "brute_force_slow": {
+          "rows": 117,
+          "correct_tier_rate": 0.9145299145299145,
+          "row_detection_rate": 0.9487179487179487,
+          "campaigns": 1,
+          "campaign_detection_rate": 1.0
+        },
+        "ddos_mild": {
+          "rows": 27,
+          "correct_tier_rate": 0.0,
+          "row_detection_rate": 0.0,
+          "campaigns": 1,
+          "campaign_detection_rate": 0.0
+        },
+        "ddos_severe": {
+          "rows": 196,
+          "correct_tier_rate": 0.0,
+          "row_detection_rate": 0.0,
+          "campaigns": 1,
+          "campaign_detection_rate": 0.0
+        },
+        "exfiltration": {
+          "rows": 67,
+          "correct_tier_rate": 0.0,
+          "row_detection_rate": 0.0,
+          "campaigns": 2,
+          "campaign_detection_rate": 0.0
+        },
+        "insider_offhours": {
+          "rows": 65,
+          "correct_tier_rate": 0.0,
+          "row_detection_rate": 0.0,
+          "campaigns": 3,
+          "campaign_detection_rate": 0.0
+        },
+        "normal": {
+          "rows": 49553,
+          "correct_tier_rate": 0.9996972938066313,
+          "false_alarm_rate": 0.0,
+          "false_high_rate": 0.0
+        },
+        "ransomware": {
+          "rows": 17,
+          "correct_tier_rate": 0.0,
+          "row_detection_rate": 0.0,
+          "campaigns": 1,
+          "campaign_detection_rate": 0.0
+        },
+        "recon": {
+          "rows": 30,
+          "correct_tier_rate": 1.0,
+          "row_detection_rate": 0.0,
+          "campaigns": 2,
+          "campaign_detection_rate": 0.0
+        }
+      }
+    },
+    "Expert rules only (thresholds)": {
+      "accuracy": 0.7869339716736485,
+      "precision_macro": 0.5430988119382184,
+      "recall_macro": 0.8287685466525735,
+      "f1_macro": 0.5562724141046339,
+      "per_class": {
+        "Low": {
+          "precision": 0.9989228559704555,
+          "recall": 0.7857892188508715,
+          "f1": 0.8796296296296297,
+          "support": 49568
+        },
+        "Medium": {
+          "precision": 0.013911233084129839,
+          "recall": 0.7033492822966507,
+          "f1": 0.027282850779510023,
+          "support": 209
+        },
+        "High": {
+          "precision": 0.6164623467600701,
+          "recall": 0.9971671388101983,
+          "f1": 0.7619047619047619,
+          "support": 353
+        }
+      },
+      "confusion_matrix": [
+        [
+          38950,
+          10419,
+          199
+        ],
+        [
+          42,
+          147,
+          20
+        ],
+        [
+          0,
+          1,
+          352
+        ]
+      ],
+      "high_recall": 0.9971671388101983,
+      "high_precision": 0.6164623467600701,
+      "families": {
+        "brute_force": {
+          "rows": 58,
+          "correct_tier_rate": 1.0,
+          "row_detection_rate": 1.0,
+          "campaigns": 6,
+          "campaign_detection_rate": 1.0
+        },
+        "brute_force_slow": {
+          "rows": 117,
+          "correct_tier_rate": 0.9145299145299145,
+          "row_detection_rate": 0.9487179487179487,
+          "campaigns": 1,
+          "campaign_detection_rate": 1.0
+        },
+        "ddos_mild": {
+          "rows": 27,
+          "correct_tier_rate": 0.6666666666666666,
+          "row_detection_rate": 0.6666666666666666,
+          "campaigns": 1,
+          "campaign_detection_rate": 1.0
+        },
+        "ddos_severe": {
+          "rows": 196,
+          "correct_tier_rate": 1.0,
+          "row_detection_rate": 1.0,
+          "campaigns": 1,
+          "campaign_detection_rate": 1.0
+        },
+        "exfiltration": {
+          "rows": 67,
+          "correct_tier_rate": 0.9850746268656716,
+          "row_detection_rate": 1.0,
+          "campaigns": 2,
+          "campaign_detection_rate": 1.0
+        },
+        "insider_offhours": {
+          "rows": 65,
+          "correct_tier_rate": 0.3384615384615385,
+          "row_detection_rate": 0.5846153846153846,
+          "campaigns": 3,
+          "campaign_detection_rate": 1.0
+        },
+        "normal": {
+          "rows": 49553,
+          "correct_tier_rate": 0.7857243759207313,
+          "false_alarm_rate": 0.21457833027263737,
+          "false_high_rate": 0.004318608358727019
+        },
+        "ransomware": {
+          "rows": 17,
+          "correct_tier_rate": 1.0,
+          "row_detection_rate": 1.0,
+          "campaigns": 1,
+          "campaign_detection_rate": 1.0
+        },
+        "recon": {
+          "rows": 30,
+          "correct_tier_rate": 1.0,
+          "row_detection_rate": 0.0,
+          "campaigns": 2,
+          "campaign_detection_rate": 0.0
+        }
+      }
+    },
+    "XGBoost + cost policy + rules (max tier)": {
+      "accuracy": 0.9991222820666268,
+      "precision_macro": 0.952475957916065,
+      "recall_macro": 0.9812966606902352,
+      "f1_macro": 0.9665011021019977,
+      "per_class": {
+        "Low": {
+          "precision": 0.9998385273696109,
+          "recall": 0.9993544222078761,
+          "f1": 0.9995964161756397,
+          "support": 49568
+        },
+        "Medium": {
+          "precision": 0.8878923766816144,
+          "recall": 0.9473684210526315,
+          "f1": 0.9166666666666666,
+          "support": 209
+        },
+        "High": {
+          "precision": 0.9696969696969697,
+          "recall": 0.9971671388101983,
+          "f1": 0.9832402234636871,
+          "support": 353
+        }
+      },
+      "confusion_matrix": [
+        [
+          49536,
+          25,
+          7
+        ],
+        [
+          7,
+          198,
+          4
+        ],
+        [
+          1,
+          0,
+          352
+        ]
+      ],
+      "high_recall": 0.9971671388101983,
+      "high_precision": 0.9696969696969697,
+      "families": {
+        "brute_force": {
+          "rows": 58,
+          "correct_tier_rate": 1.0,
+          "row_detection_rate": 1.0,
+          "campaigns": 6,
+          "campaign_detection_rate": 1.0
+        },
+        "brute_force_slow": {
+          "rows": 117,
+          "correct_tier_rate": 0.9658119658119658,
+          "row_detection_rate": 1.0,
+          "campaigns": 1,
+          "campaign_detection_rate": 1.0
+        },
+        "ddos_mild": {
+          "rows": 27,
+          "correct_tier_rate": 1.0,
+          "row_detection_rate": 1.0,
+          "campaigns": 1,
+          "campaign_detection_rate": 1.0
+        },
+        "ddos_severe": {
+          "rows": 196,
+          "correct_tier_rate": 1.0,
+          "row_detection_rate": 1.0,
+          "campaigns": 1,
+          "campaign_detection_rate": 1.0
+        },
+        "exfiltration": {
+          "rows": 67,
+          "correct_tier_rate": 0.9850746268656716,
+          "row_detection_rate": 0.9850746268656716,
+          "campaigns": 2,
+          "campaign_detection_rate": 1.0
+        },
+        "insider_offhours": {
+          "rows": 65,
+          "correct_tier_rate": 0.8923076923076924,
+          "row_detection_rate": 0.8923076923076924,
+          "campaigns": 3,
+          "campaign_detection_rate": 1.0
+        },
+        "normal": {
+          "rows": 49553,
+          "correct_tier_rate": 0.9993945876132626,
+          "false_alarm_rate": 0.000908118580106149,
+          "false_high_rate": 0.0004439690836074506
+        },
+        "ransomware": {
+          "rows": 17,
+          "correct_tier_rate": 1.0,
+          "row_detection_rate": 1.0,
+          "campaigns": 1,
+          "campaign_detection_rate": 1.0
+        },
+        "recon": {
+          "rows": 30,
+          "correct_tier_rate": 0.9333333333333333,
+          "row_detection_rate": 0.06666666666666667,
+          "campaigns": 2,
+          "campaign_detection_rate": 0.5
+        }
+      }
+    },
+    "Legacy 5-model ensemble": {
+      "accuracy": 0.9989028525832835,
+      "precision_macro": 0.9638862904076039,
+      "recall_macro": 0.9516980378050199,
+      "f1_macro": 0.9575661748810705,
+      "per_class": {
+        "Low": {
+          "precision": 0.9993746848209784,
+          "recall": 0.999515816655907,
+          "f1": 0.99944524575613,
+          "support": 49568
+        },
+        "Medium": {
+          "precision": 0.9090909090909091,
+          "recall": 0.861244019138756,
+          "f1": 0.8845208845208845,
+          "support": 209
+        },
+        "High": {
+          "precision": 0.9831932773109243,
+          "recall": 0.9943342776203966,
+          "f1": 0.9887323943661972,
+          "support": 353
+        }
+      },
+      "confusion_matrix": [
+        [
+          49544,
+          18,
+          6
+        ],
+        [
+          29,
+          180,
+          0
+        ],
+        [
+          2,
+          0,
+          351
+        ]
+      ],
+      "high_recall": 0.9943342776203966,
+      "high_precision": 0.9831932773109243,
+      "roc_auc_ovr_macro": 0.9997103685632537,
+      "average_precision": {
+        "Low": 0.9999970694749003,
+        "Medium": 0.9434392981825003,
+        "High": 0.9937257493004039
+      },
+      "ece": 0.015488173323482884,
+      "latency_ms_per_row_batch": 0.12632292377099813,
+      "n_train_rows": 20000,
+      "families": {
+        "brute_force": {
+          "rows": 58,
+          "correct_tier_rate": 1.0,
+          "row_detection_rate": 1.0,
+          "campaigns": 6,
+          "campaign_detection_rate": 1.0
+        },
+        "brute_force_slow": {
+          "rows": 117,
+          "correct_tier_rate": 1.0,
+          "row_detection_rate": 1.0,
+          "campaigns": 1,
+          "campaign_detection_rate": 1.0
+        },
+        "ddos_mild": {
+          "rows": 27,
+          "correct_tier_rate": 1.0,
+          "row_detection_rate": 1.0,
+          "campaigns": 1,
+          "campaign_detection_rate": 1.0
+        },
+        "ddos_severe": {
+          "rows": 196,
+          "correct_tier_rate": 1.0,
+          "row_detection_rate": 1.0,
+          "campaigns": 1,
+          "campaign_detection_rate": 1.0
+        },
+        "exfiltration": {
+          "rows": 67,
+          "correct_tier_rate": 0.9701492537313433,
+          "row_detection_rate": 0.9701492537313433,
+          "campaigns": 2,
+          "campaign_detection_rate": 1.0
+        },
+        "insider_offhours": {
+          "rows": 65,
+          "correct_tier_rate": 0.5538461538461539,
+          "row_detection_rate": 0.5538461538461539,
+          "campaigns": 3,
+          "campaign_detection_rate": 0.6666666666666666
+        },
+        "normal": {
+          "rows": 49553,
+          "correct_tier_rate": 0.99951567009061,
+          "false_alarm_rate": 0.0007870361027586624,
+          "false_high_rate": 0.0004237886707162029
+        },
+        "ransomware": {
+          "rows": 17,
+          "correct_tier_rate": 1.0,
+          "row_detection_rate": 1.0,
+          "campaigns": 1,
+          "campaign_detection_rate": 1.0
+        },
+        "recon": {
+          "rows": 30,
+          "correct_tier_rate": 1.0,
+          "row_detection_rate": 0.0,
+          "campaigns": 2,
+          "campaign_detection_rate": 0.0
+        }
+      }
+    },
+    "Legacy member: rf": {
+      "accuracy": 0.998623578695392,
+      "precision_macro": 0.9710349564104686,
+      "recall_macro": 0.9211416783192012,
+      "f1_macro": 0.9437109756258891,
+      "per_class": {
+        "Low": {
+          "precision": 0.9989717949234894,
+          "recall": 0.9996368624919303,
+          "f1": 0.9993042180520122,
+          "support": 49568
+        },
+        "Medium": {
+          "precision": 0.9310344827586207,
+          "recall": 0.7751196172248804,
+          "f1": 0.8459530026109661,
+          "support": 209
+        },
+        "High": {
+          "precision": 0.9830985915492958,
+          "recall": 0.9886685552407932,
+          "f1": 0.9858757062146892,
+          "support": 353
+        }
+      },
+      "confusion_matrix": [
+        [
+          49550,
+          12,
+          6
+        ],
+        [
+          47,
+          162,
+          0
+        ],
+        [
+          4,
+          0,
+          349
+        ]
+      ],
+      "high_recall": 0.9886685552407932,
+      "high_precision": 0.9830985915492958,
+      "roc_auc_ovr_macro": 0.9957276544706423,
+      "average_precision": {
+        "Low": 0.9999369702816919,
+        "Medium": 0.939223849113816,
+        "High": 0.9964719742754947
+      },
+      "ece": 0.013963632524702797
+    },
+    "Legacy member: gb": {
+      "accuracy": 0.9991023339317774,
+      "precision_macro": 0.9841608542193928,
+      "recall_macro": 0.947000770802488,
+      "f1_macro": 0.9642447824144696,
+      "per_class": {
+        "Low": {
+          "precision": 0.9993143917243048,
+          "recall": 0.9997780826339574,
+          "f1": 0.9995461834024143,
+          "support": 49568
+        },
+        "Medium": {
+          "precision": 0.9672131147540983,
+          "recall": 0.84688995215311,
+          "f1": 0.9030612244897959,
+          "support": 209
+        },
+        "High": {
+          "precision": 0.9859550561797753,
+          "recall": 0.9943342776203966,
+          "f1": 0.9901269393511989,
+          "support": 353
+        }
+      },
+      "confusion_matrix": [
+        [
+          49557,
+          6,
+          5
+        ],
+        [
+          32,
+          177,
+          0
+        ],
+        [
+          2,
+          0,
+          351
+        ]
+      ],
+      "high_recall": 0.9943342776203966,
+      "high_precision": 0.9859550561797753,
+      "roc_auc_ovr_macro": 0.9878166660460987,
+      "average_precision": {
+        "Low": 0.9998295034497442,
+        "Medium": 0.9260728980518699,
+        "High": 0.9957051532331272
+      },
+      "ece": 0.020271743050982005
+    },
+    "Legacy member: svm": {
+      "accuracy": 0.9978655495711151,
+      "precision_macro": 0.9058713340332636,
+      "recall_macro": 0.9656418939019203,
+      "f1_macro": 0.9340305628252009,
+      "per_class": {
+        "Low": {
+          "precision": 0.9995959840817729,
+          "recall": 0.9982851839896708,
+          "f1": 0.9989401540309475,
+          "support": 49568
+        },
+        "Medium": {
+          "precision": 0.8513513513513513,
+          "recall": 0.9043062200956937,
+          "f1": 0.877030162412993,
+          "support": 209
+        },
+        "High": {
+          "precision": 0.8666666666666667,
+          "recall": 0.9943342776203966,
+          "f1": 0.9261213720316622,
+          "support": 353
+        }
+      },
+      "confusion_matrix": [
+        [
+          49483,
+          33,
+          52
+        ],
+        [
+          18,
+          189,
+          2
+        ],
+        [
+          2,
+          0,
+          351
+        ]
+      ],
+      "high_recall": 0.9943342776203966,
+      "high_precision": 0.8666666666666667,
+      "roc_auc_ovr_macro": 0.9991288611817045,
+      "average_precision": {
+        "Low": 0.9999882595838442,
+        "Medium": 0.9172143708570214,
+        "High": 0.9909815742926935
+      },
+      "ece": 0.019208513707113205
+    },
+    "Legacy member: lr": {
+      "accuracy": 0.9979453421105127,
+      "precision_macro": 0.9258962165589223,
+      "recall_macro": 0.9123215691006671,
+      "f1_macro": 0.9177147537855118,
+      "per_class": {
+        "Low": {
+          "precision": 0.9990114988904579,
+          "recall": 0.999051807617818,
+          "f1": 0.9990316528475458,
+          "support": 49568
+        },
+        "Medium": {
+          "precision": 0.8478260869565217,
+          "recall": 0.7464114832535885,
+          "f1": 0.7938931297709924,
+          "support": 209
+        },
+        "High": {
+          "precision": 0.9308510638297872,
+          "recall": 0.9915014164305949,
+          "f1": 0.9602194787379973,
+          "support": 353
+        }
+      },
+      "confusion_matrix": [
+        [
+          49521,
+          28,
+          19
+        ],
+        [
+          46,
+          156,
+          7
+        ],
+        [
+          3,
+          0,
+          350
+        ]
+      ],
+      "high_recall": 0.9915014164305949,
+      "high_precision": 0.9308510638297872,
+      "roc_auc_ovr_macro": 0.9976907296897245,
+      "average_precision": {
+        "Low": 0.9999884921706089,
+        "Medium": 0.8508169647749755,
+        "High": 0.9806117177716307
+      },
+      "ece": 0.014221965581766909
+    },
+    "Legacy member: xgb": {
+      "accuracy": 0.9989028525832835,
+      "precision_macro": 0.9522085452839543,
+      "recall_macro": 0.9688809719726672,
+      "f1_macro": 0.9603755286383011,
+      "per_class": {
+        "Low": {
+          "precision": 0.9995762284330542,
+          "recall": 0.9993140735958683,
+          "f1": 0.9994451338236333,
+          "support": 49568
+        },
+        "Medium": {
+          "precision": 0.8767123287671232,
+          "recall": 0.9186602870813397,
+          "f1": 0.897196261682243,
+          "support": 209
+        },
+        "High": {
+          "precision": 0.9803370786516854,
+          "recall": 0.9886685552407932,
+          "f1": 0.9844851904090268,
+          "support": 353
+        }
+      },
+      "confusion_matrix": [
+        [
+          49534,
+          27,
+          7
+        ],
+        [
+          17,
+          192,
+          0
+        ],
+        [
+          4,
+          0,
+          349
+        ]
+      ],
+      "high_recall": 0.9886685552407932,
+      "high_precision": 0.9803370786516854,
+      "roc_auc_ovr_macro": 0.9997578597275126,
+      "average_precision": {
+        "Low": 0.9999978406034036,
+        "Medium": 0.9553273469524389,
+        "High": 0.9934572779742255
+      },
+      "ece": 0.007719617221532941
+    },
+    "Isolation Forest (binary, unsupervised)": {
+      "roc_auc_attack_vs_normal": 0.9996361929724528,
+      "at_threshold": {
+        "fpr_1pct": {
+          "threshold": 0.518477126059129,
+          "false_alarm_rate_normal": 0.025245696526950943,
+          "recall_all_attacks": 1.0,
+          "recall_by_family": {
+            "brute_force": 1.0,
+            "brute_force_slow": 1.0,
+            "ddos_mild": 1.0,
+            "ddos_severe": 1.0,
+            "exfiltration": 1.0,
+            "insider_offhours": 1.0,
+            "ransomware": 1.0,
+            "recon": 1.0
+          },
+          "recall_on_holdout_family": 1.0
+        },
+        "fpr_5pct": {
+          "threshold": 0.46438528875446383,
+          "false_alarm_rate_normal": 0.10437309547353339,
+          "recall_all_attacks": 1.0,
+          "recall_by_family": {
+            "brute_force": 1.0,
+            "brute_force_slow": 1.0,
+            "ddos_mild": 1.0,
+            "ddos_severe": 1.0,
+            "exfiltration": 1.0,
+            "insider_offhours": 1.0,
+            "ransomware": 1.0,
+            "recon": 1.0
+          },
+          "recall_on_holdout_family": 1.0
+        },
+        "fpr_10pct": {
+          "threshold": 0.44572382109489184,
+          "false_alarm_rate_normal": 0.16162492684600327,
+          "recall_all_attacks": 1.0,
+          "recall_by_family": {
+            "brute_force": 1.0,
+            "brute_force_slow": 1.0,
+            "ddos_mild": 1.0,
+            "ddos_severe": 1.0,
+            "exfiltration": 1.0,
+            "insider_offhours": 1.0,
+            "ransomware": 1.0,
+            "recon": 1.0
+          },
+          "recall_on_holdout_family": 1.0
+        }
+      },
+      "holdout_family": "credential_stuffing",
+      "holdout_rows": 152,
+      "xgb_detection_rate_on_holdout_family": 0.35526315789473684,
+      "xgb_campaign_detection_on_holdout_family": 1.0,
+      "rf_detection_rate_on_holdout_family": 0.7894736842105263
+    }
+  }
+}

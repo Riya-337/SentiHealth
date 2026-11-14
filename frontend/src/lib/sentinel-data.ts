@@ -419,15 +419,17 @@ export function useSentinel(autoRefresh = true): SentinelSnapshot {
 
 export { authHeaders };
 
-// Shown until /api/metrics answers. Copied from evaluation/evaluation_metrics.json (rounded to 4 places),
-// so the offline table shows the stored results, not invented ones. Update both together.
+// Shown until /api/metrics answers. Copied from evaluation/evaluation_metrics.json as written by
+// ml/evaluate.py (macro averages on the synthetic test period, rounded to 4 places). Update both together.
+// Rule-only systems have no probabilities, so no ROC-AUC (shown as 0).
 const DEMO_ML_METRICS: MLMetricRow[] = [
-  { model: "ENSEMBLE (weighted)", accuracy: 0.9722, precision: 0.973, recall: 0.9722, f1: 0.9724, auc: 0.9997, ensemble: true },
-  { model: "XGB (XGBoost)", accuracy: 0.9587, precision: 0.9612, recall: 0.9587, f1: 0.9594, auc: 0.9918 },
-  { model: "GB (Gradient Boosting)", accuracy: 0.9404, precision: 0.9457, recall: 0.9404, f1: 0.9418, auc: 0.9911 },
-  { model: "LR (Logistic Regression)", accuracy: 0.9349, precision: 0.9413, recall: 0.9349, f1: 0.9366, auc: 0.9958 },
-  { model: "RF (Random Forest)", accuracy: 0.9341, precision: 0.9412, recall: 0.9341, f1: 0.9359, auc: 0.9986 },
-  { model: "SVM (Support Vector Machine)", accuracy: 0.9214, precision: 0.9319, recall: 0.9214, f1: 0.924, auc: 0.9702 },
+  { model: "XGBoost (calibrated)", accuracy: 0.9993, precision: 0.9684, recall: 0.9798, f1: 0.974, auc: 0.9922, ensemble: true },
+  { model: "XGBoost + cost policy", accuracy: 0.9992, precision: 0.9567, recall: 0.9877, f1: 0.9717, auc: 0.9922 },
+  { model: "Random Forest (single, calibrated) + cost policy", accuracy: 0.9992, precision: 0.9579, recall: 0.987, f1: 0.972, auc: 0.9944 },
+  { model: "Legacy 5-model ensemble", accuracy: 0.9989, precision: 0.9639, recall: 0.9517, f1: 0.9576, auc: 0.9997 },
+  { model: "XGBoost + cost policy + rules (max tier)", accuracy: 0.9991, precision: 0.9525, recall: 0.9813, f1: 0.9665, auc: 0 },
+  { model: "Expert rules only (thresholds)", accuracy: 0.7869, precision: 0.5431, recall: 0.8288, f1: 0.5563, auc: 0 },
+  { model: "Rules only (deployed: failed logins)", accuracy: 0.9921, precision: 0.9759, recall: 0.5588, f1: 0.6509, auc: 0 },
 ];
 
 export function useMLMetrics(): MLMetricRow[] {

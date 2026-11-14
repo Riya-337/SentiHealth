@@ -119,7 +119,7 @@ if ls models/*.pkl &>/dev/null 2>&1; then
   MODEL_COUNT=$(ls models/*.pkl | wc -l | tr -d ' ')
   ok "ML models found ($MODEL_COUNT .pkl files)"
 else
-  fail "No ML model files found in models/ — run: python3 ml/model_trainer.py"
+  fail "No ML model files found in models/ — run: python3 ml/train.py"
 fi
 
 # Stop if pre-flight failed

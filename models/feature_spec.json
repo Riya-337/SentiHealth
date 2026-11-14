@@ -1,0 +1,57 @@
+{
+  "feature_names": [
+    "f5_logins",
+    "f5_login_failures",
+    "f5_ehr_reads",
+    "f5_export_kb",
+    "f5_requests",
+    "f5_fail_ratio",
+    "f5_distinct_endpoints_max",
+    "f5_internal_hosts_max",
+    "f5_cpu_max",
+    "f5_mem_spike",
+    "f1h_logins",
+    "f1h_login_failures",
+    "f1h_ehr_reads",
+    "f1h_export_kb",
+    "f1h_requests",
+    "f1h_fail_ratio",
+    "f1h_distinct_endpoints_max",
+    "f1h_internal_hosts_max",
+    "f1h_cpu_mean",
+    "b24_reads_per_hour",
+    "b24_export_per_hour",
+    "ratio_reads_1h_vs_base",
+    "ratio_export_1h_vs_base",
+    "hour_sin",
+    "hour_cos",
+    "is_weekend",
+    "offshift_score",
+    "ip_reputation",
+    "is_internal_ip"
+  ],
+  "n_features": 29,
+  "tiers": [
+    "Low",
+    "Medium",
+    "High"
+  ],
+  "events": "data/events_sim.jsonl.gz",
+  "holdout_family": "credential_stuffing",
+  "seed": 0,
+  "split": {
+    "train_end": "2025-03-12 12:45:00+00:00",
+    "val_end": "2025-03-14 08:38:00+00:00",
+    "n_train": 234065,
+    "n_val": 50156,
+    "n_test": 50187
+  },
+  "trained_at": "2026-11-14T18:09:43+00:00",
+  "versions": {
+    "python": "3.13.3",
+    "numpy": "2.4.4",
+    "pandas": "3.0.2",
+    "sklearn": "1.8.0",
+    "xgboost": "3.2.0"
+  }
+}

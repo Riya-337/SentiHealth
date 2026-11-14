@@ -23,8 +23,8 @@ SentiHealth applies a **defense-in-depth testing strategy** mirroring its securi
 | `test_sentinel.py` | Unit | Core pipeline (feature extraction, scoring, chain, Telegram) | `python -m pytest test_sentinel.py -v` |
 | `test_tiers.py` | Unit | Tier boundary classification | `python -m pytest test_tiers.py -v` |
 | `attack_scripts/tamper_chain.py` | Security | Audit chain tamper detection | `python3 attack_scripts/tamper_chain.py` |
-| `evaluate_models.py` | ML Evaluation | Model accuracy, precision, recall, F1, AUC-ROC | `python3 evaluate_models.py` |
-| `evaluate_models_v2.py` | ML Evaluation | Boundary stress test | `python3 evaluate_models_v2.py` |
+| `tests/test_ml_pipeline.py` | Unit | Simulator determinism, online = batch features, rules layers, label-leak guard | `python -m pytest tests/test_ml_pipeline.py -v` |
+| `ml/evaluate.py` | ML Evaluation | Measured accuracy, per-class P/R/F1, calibration, per-family and held-out-family detection | `python3 ml/evaluate.py` |
 | `demo_scenario.py` | E2E Integration | Full pipeline smoke test | `python3 demo_scenario.py` |
 | `interactive_demo.py` | E2E Integration | Interactive attack → response cycle | `python3 interactive_demo.py` |
 
@@ -123,30 +123,25 @@ Tests verify that tier classification boundaries work correctly:
 
 ## 5. ML Model Evaluation
 
-### 5.1 Running Evaluation
+### 5.1 Running the pipeline end to end
 ```bash
 source .venv/bin/activate
-python3 evaluate_models.py         # Standard test split evaluation
-python3 evaluate_models_v2.py      # Boundary stress test evaluation
+python3 ml/simulate_events.py          # synthetic event stream -> data/events_sim.jsonl.gz (deterministic, ~10 s)
+python3 ml/train.py --legacy           # temporal split; XGBoost + RF + Isolation Forest (+ the old 5-model ensemble for the ablation)
+python3 ml/evaluate.py                 # writes evaluation/REPORT.md, report.json and evaluation_metrics.json
 ```
 
-### 5.2 Minimum Acceptable Metrics
+### 5.2 What the numbers mean
 
-| Model | Min F1 | Min AUC-ROC |
-|-------|--------|-------------|
-| Random Forest | 0.55 | 0.52 |
-| Gradient Boosting | 0.55 | 0.52 |
-| SVM (RBF) | 0.50 | 0.50 |
-| Logistic Regression | 0.55 | 0.52 |
-| XGBoost | 0.55 | 0.52 |
-| **Ensemble (weighted)** | **0.90** | **0.95** |
+`ml/evaluate.py` reports exactly what it measures on the test period (the last 15 % of the simulated
+time, never used for training, model selection or calibration). There is no target range and no
+re-sampling of the test set. Read `evaluation/REPORT.md` for the current values, and remember that all
+of them are on synthetic data: the same person wrote the simulator and the features, so real-world
+performance is unknown until the pipeline is run on real logs.
 
-> **Note:** Individual model performance is intentionally moderate on the operational distribution (70/20/10 Low/Medium/High). The ensemble significantly outperforms any single model.
-
-### 5.3 Regenerating Metrics
-```bash
-python3 generate_metrics.py    # Outputs evaluation_metrics.json
-```
+Regression guards in `tests/test_ml_pipeline.py` check behaviour, not numbers: the simulator is
+deterministic, the online feature windower equals the batch table, a sender-supplied `attack_type`
+cannot move the tier, and the same input always gives the same score.
 
 ---
 
@@ -171,14 +166,14 @@ python3 attack_scripts/tamper_chain.py
 ### 6.2 Model Manifest Tamper Test (Manual)
 ```bash
 # Corrupt a model file
-echo "corrupted" >> models/calibrated_rf.pkl
+echo "corrupted" >> models/xgb_calibrated.pkl
 
 # Attempt to start the sentinel
-python3 live_sentinel.py
+python3 core/live_sentinel.py
 ```
 **Expected output:**
 ```
-MODEL TAMPERED: rf
+MODEL TAMPERED: xgb_calibrated
 ```
 (Immediate SystemExit — sentinel refuses to start with a tampered model)
 
@@ -191,13 +186,12 @@ queue = [{'tier_label': 'Low', 'source': 'test'} for _ in range(100)]
 json.dump(queue, open('retraining/retraining_queue.json', 'w'))
 "
 
-# Attempt retraining
-python3 model_trainer.py
+# Review the queue: the poisoning check in core/review_queue.py flags approvals that would shift the
+# approved-per-tier distribution suspiciously and asks for an explicit override.
+python3 core/review_queue.py
 ```
-**Expected output:**
-```
-[POISON QUARANTINE] N rows quarantined (baseline High=X%, candidate=Y%). See logs/poison_quarantine.json.
-```
+**Expected output:** the suspicious batch is flagged as a potential poisoning attempt and is not
+approved for retraining without an override.
 
 ---
 

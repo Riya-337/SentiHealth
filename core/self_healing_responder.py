@@ -176,18 +176,46 @@ def snapshot_database():
         shutil.copy(APP_DB, os.path.join(SNAPSHOTS_DIR, f'snap_{int(time.time())}.db'))
 
 
+def _read_entries(path: str) -> tuple[list, bool]:
+    """logs/locked_accounts.json is written as a JSON array by the dashboard (login lockouts) and as
+    JSON lines by this module. Read either. Returns (entries, is_array)."""
+    if not os.path.exists(path):
+        return [], False
+    with open(path, 'r', encoding='utf-8') as f:
+        text = f.read().strip()
+    if not text:
+        return [], False
+    if text.startswith('['):
+        try:
+            return list(json.loads(text)), True
+        except json.JSONDecodeError:
+            pass
+    out = []
+    for line in text.splitlines():
+        line = line.strip()
+        if line:
+            try:
+                out.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+    return out, False
+
+
 def lock_account(user_id: str):
-    locked = set()
-    if os.path.exists(LOCKED_ACCOUNTS):
-        with open(LOCKED_ACCOUNTS, 'r') as f:
-            for line in f:
-                if line.strip():
-                    locked.add(json.loads(line)['user_id'])
+    entries, is_array = _read_entries(LOCKED_ACCOUNTS)
+    locked = {e.get('user_id') or e.get('username') for e in entries if isinstance(e, dict)}
     if user_id in locked:
         print(f"[*] Account {user_id} already locked.")
         return
-    with open(LOCKED_ACCOUNTS, 'a') as f:
-        f.write(json.dumps({"user_id": user_id, "time": datetime.now(timezone.utc).isoformat()}) + "\n")
+    entry = {"user_id": user_id, "username": user_id, "status": "locked",
+             "time": datetime.now(timezone.utc).isoformat(), "source": "self_healing_responder"}
+    if is_array:
+        entries.append(entry)
+        with open(LOCKED_ACCOUNTS, 'w', encoding='utf-8') as f:
+            json.dump(entries, f, indent=2)
+    else:
+        with open(LOCKED_ACCOUNTS, 'a', encoding='utf-8') as f:
+            f.write(json.dumps(entry) + "\n")
 
 
 def block_ip(ip_address: str):
