@@ -9,7 +9,8 @@ import {
   BarChart, Bar, XAxis, YAxis, LabelList,
 } from "recharts";
 import { useSentinel, useMLMetrics, authHeaders, formatMTTR, type Tier, type Action, type MLMetricRow } from "@/lib/sentinel-data";
-import { apiFetch, apiUrl, isDemoMode, exitDemoMode } from "@/lib/api";
+import { apiFetch, isDemoMode, exitDemoMode, openStream, askTotp } from "@/lib/api";
+import { TriagePanel, ModelHealthCard, PrivacyToggle, MaskedIp, ApiHealth } from "@/components/dashboard/Triage";
 import { Link } from "@tanstack/react-router";
 import { toast, Toaster } from "sonner";
 
@@ -52,7 +53,7 @@ function useHighTierSSE() {
       }
     };
 
-    const es = new EventSource(apiUrl(`/api/stream?token=${encodeURIComponent(token)}`));
+    const es = openStream();   // one-time ticket; no session token in the URL
 
     es.addEventListener("high_alert", (e: MessageEvent) => {
       try {
@@ -377,7 +378,7 @@ function Sidebar() {
         <span className="live-dot inline-block h-2 w-2 rounded-full bg-status-normal" />
         <div className="text-xs">
           <div className="font-medium">System Health</div>
-          <div className="text-muted-foreground">All systems operational</div>
+          <ApiHealth />
         </div>
       </div>
     </aside>
@@ -419,6 +420,7 @@ function TopBar({
       </div>
 
       <div className="flex items-center gap-4">
+        <PrivacyToggle />
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Clock className="h-4 w-4" />
           <span>Last updated:</span>
@@ -1164,24 +1166,29 @@ function AdminAlerts() {
   }, []);
 
   const respond = async (incidentId: string, decision: "YES" | "DENY") => {
+    if (isDemoMode()) {
+      setChallenges((c) => c.filter((x) => x.incident_id !== incidentId));
+      toast.info("Demo mode: no real action taken.");
+      return;
+    }
+    const totp_code = askTotp(`${decision === "YES" ? "APPROVE" : "DENY"} incident ${incidentId.slice(0, 8)}`);
+    if (!totp_code) return;
     setDeciding((d) => ({ ...d, [incidentId]: true }));
     try {
       const res = await apiFetch(`/api/alerts/${incidentId}/respond`, {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ decision }),
+        body: JSON.stringify({ decision, totp_code }),
       });
-      const data = await res.json();
-      if (data.success) {
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
         setChallenges((c) => c.filter((x) => x.incident_id !== incidentId));
         toast.success(decision === "YES" ? "Approved — forensic report generating." : "Denied — defensive posture held.");
       } else {
-        setChallenges((c) => c.filter((x) => x.incident_id !== incidentId));
-        toast.success(decision === "YES" ? "Approved — forensic report generating." : "Denied — defensive posture held.");
+        toast.error(data.message || `Request failed (${res.status}).`);
       }
     } catch {
-      setChallenges((c) => c.filter((x) => x.incident_id !== incidentId));
-      toast.success(decision === "YES" ? "Approved — forensic report generating." : "Denied — defensive posture held.");
+      toast.error("Could not reach the security server.");
     } finally {
       setDeciding((d) => ({ ...d, [incidentId]: false }));
     }
@@ -1372,7 +1379,7 @@ function StasisPanel() {
   useEffect(() => {
     const token = sessionStorage.getItem("auth_token");
     if (!token) return;
-    const es = new EventSource(apiUrl(`/api/stream?token=${encodeURIComponent(token)}`));
+    const es = openStream();   // one-time ticket; no session token in the URL
     es.addEventListener("stasis_resolved", () => fetchStasis());
     return () => es.close();
   }, []);
@@ -1574,7 +1581,7 @@ function ThreatDetailDrawer({
           <div>
             <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Source IP</div>
             <div className="flex items-center gap-3">
-              <span className="font-mono-sec text-xl font-bold tracking-tight">{threat.ip}</span>
+              <MaskedIp ip={threat.ip} className="font-mono-sec text-xl font-bold tracking-tight" />
               <span className="rounded-lg border border-border bg-muted/30 px-2 py-1 text-[11px] text-muted-foreground">
                 {threat.city}, {threat.country}
               </span>
@@ -1893,6 +1900,11 @@ export function Dashboard() {
             <MTTRCard since={snap.lastHighAt} />
           </div>
 
+          {/* triage queue: incidents, not single events */}
+          <div className="mt-6">
+            <TriagePanel isAdmin={isAdmin} hideLow={true} />
+          </div>
+
           {/* row 2 */}
           <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
             <RecentTable rows={filteredRecent} onSelect={setSelectedThreat} />
@@ -1910,6 +1922,12 @@ export function Dashboard() {
           <div className="mt-6">
             <DetailedAnalysis feed={snap.feed} blocked={snap.blocked} />
           </div>
+
+          {isAdmin && (
+            <div className="mt-6">
+              <ModelHealthCard />
+            </div>
+          )}
 
           {/* row 5 — admin-only SSE control panels */}
           {isAdmin && (

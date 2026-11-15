@@ -86,6 +86,13 @@ from scoring_matrix import score_event
 from self_healing_responder import respond
 
 TEST_MODE = os.environ.get("SENTIHEALTH_TEST_MODE", "0") == "1"
+# Events must carry a valid HMAC (security/event_signing.py) unless explicitly disabled or in test mode.
+REQUIRE_SIGNED_EVENTS = os.environ.get("SENTIHEALTH_REQUIRE_SIGNED_EVENTS", "1") == "1" and not TEST_MODE
+from event_signing import verify_line as _verify_event_line, get_signing_key as _get_signing_key
+from incidents import is_snoozed as _is_snoozed
+from response_adapters import expire_actions as _expire_actions
+_SIGNING_KEY = _get_signing_key()
+_sig_dropped = collections.Counter()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 DEBUG = False
@@ -437,6 +444,17 @@ def run_live_sentinel():
     os.makedirs(LOGS_DIR, exist_ok=True)
     if not os.path.exists(log_file):
         open(log_file, 'w').close()
+    print(f"  Signed events required: {REQUIRE_SIGNED_EVENTS}")
+
+    def _ttl_loop():
+        while True:
+            time.sleep(60)
+            try:
+                for undone in _expire_actions():
+                    print(f"{Fore.CYAN}[TTL] block on {undone.get('ip')} expired and was released")
+            except Exception:
+                pass
+    threading.Thread(target=_ttl_loop, daemon=True).start()
 
     processed_event_ids = set()
     session_high_ips = set()
@@ -478,7 +496,14 @@ def run_live_sentinel():
             continue
 
         try:
-            event = json.loads(line)
+            event, sig_status = _verify_event_line(line, _SIGNING_KEY)
+            if event is None or (sig_status == "unsigned" and REQUIRE_SIGNED_EVENTS):
+                _sig_dropped[sig_status] += 1
+                if _sig_dropped[sig_status] in (1, 10, 100, 1000):
+                    logger.warning(f"SECURITY: dropped {sig_status} event line (total {_sig_dropped[sig_status]}). "
+                                   "Sensors must sign events with the key from scripts/export_sensor_key.py "
+                                   "(or set SENTIHEALTH_REQUIRE_SIGNED_EVENTS=0 for a lab setup).")
+                continue
             event_id = event.get('event_id')
             if event_id:
                 if event_id in processed_event_ids:
@@ -494,14 +519,27 @@ def run_live_sentinel():
                     logger.warning("SECURITY: is_precomputed_feature outside test mode. Discarding attack script test event. (Run with: SENTIHEALTH_TEST_MODE=1 python3 live_sentinel.py)")
                     continue
 
-            if not features:
-                continue
-
             ip = event.get('source_ip', event.get('ip_address', 'Unknown'))
+
+            # Stream path: a raw per-minute record lets the scorer keep this entity's history and build
+            # the windowed features itself (the same ones the models were trained on).
+            raw = event.get('raw')
+            stream_record = None
+            if isinstance(raw, dict) and raw.get('ts') and not event.get('is_precomputed_feature'):
+                stream_record = dict(raw)
+                stream_record.setdefault('ip', ip)
+                stream_record.setdefault('user_id', event.get('user_id', 'anonymous'))
+                for k in ('attack_type', 'asset_type', 'emergency_status', 'role'):
+                    if k in features and k not in stream_record:
+                        stream_record[k] = features[k]
+            scoring_input = stream_record if stream_record is not None else features
+
+            if not scoring_input:
+                continue
 
             # ── Already-blocked IP: log it once as "blocked" and skip full pipeline ──
             if ip in locked_ips:
-                result = score_event(features)
+                result = score_event(scoring_input)
                 print(f"{Fore.RED}[BLOCKED] {ip} is already blocked — "
                       f"still attempting ({result['tier']} score={result['raw_score']:.3f})")
                 with open(THREAT_LOG, 'a') as _flog:
@@ -516,9 +554,26 @@ def run_live_sentinel():
                     }) + "\n")
                 continue
 
-            result = score_event(features)
+            result = score_event(scoring_input)
+            if stream_record is not None:
+                features = dict(result.get('features', {}))   # the legacy eight derived from the windows, for logs and SHAP
 
             logger.info(f"{Fore.WHITE}Tier={result['tier']} | Score={result['raw_score']:.3f}")
+
+            # Analyst snooze: Low/Medium alerts for a known-benign entity are logged but not actioned.
+            _snooze = _is_snoozed(ip) if result['tier'] != 'High' else None
+            if _snooze:
+                print(f"{Fore.CYAN}[snoozed] {ip} {result['tier']} score={result['raw_score']:.3f} (until {_snooze.get('until')}: {_snooze.get('reason')})")
+                with open(THREAT_LOG, 'a') as _flog:
+                    _flog.write(json.dumps({
+                        "ip": ip, "tier": result['tier'], "score": result['raw_score'],
+                        "timestamp": datetime.now(timezone.utc).isoformat(), "action": "snoozed",
+                        "reason": result.get('plain_english_explanation', ''), "shap_file": "",
+                        "attack_type": result.get('attack_type', 'normal'), "top_features": result.get('top_features', []),
+                        "feature_values": result.get('feature_values', {}),
+                        "model_disagreement": round(float(result.get('confidence_interval', 0.0)), 4),
+                    }) + "\n")
+                continue
 
             if result['tier'] == 'High' and session_start_time is None:
                 session_start_time = time.time()

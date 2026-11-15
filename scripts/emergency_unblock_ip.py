@@ -24,14 +24,18 @@ from _paths import BLOCKED_IPS, AUDIT_CHAIN, AUDIT_CHAIN_REPLICA, DATA_DIR
 def unblock_ips(ip_address: str = None, operator: str = "admin", reason: str = "Emergency manual override", outage_log: bool = False) -> bool:
     # 1. Update blocked_ips.json
     os.makedirs(os.path.dirname(BLOCKED_IPS), exist_ok=True)
+    # blocked_ips.json is JSON lines (one object per line); an older JSON-array file is read too
+    blocked = []
     if os.path.exists(BLOCKED_IPS):
         try:
             with open(BLOCKED_IPS, 'r') as f:
-                blocked = json.load(f)
+                text = f.read().strip()
+            if text.startswith('['):
+                blocked = json.loads(text)
+            else:
+                blocked = [json.loads(l) for l in text.splitlines() if l.strip()]
         except Exception:
             blocked = []
-    else:
-        blocked = []
 
     if ip_address:
         blocked = [entry for entry in blocked if (isinstance(entry, dict) and entry.get('ip') != ip_address) or (isinstance(entry, str) and entry != ip_address)]
@@ -41,7 +45,14 @@ def unblock_ips(ip_address: str = None, operator: str = "admin", reason: str = "
         action_name = "EMERGENCY_UNBLOCK_ALL_IPS"
 
     with open(BLOCKED_IPS, 'w') as f:
-        json.dump(blocked, f, indent=2)
+        for entry in blocked:
+            f.write(json.dumps(entry if isinstance(entry, dict) else {"ip": entry}) + "\n")
+    try:
+        from response_adapters import FirewallAdapter
+        if ip_address:
+            FirewallAdapter().unblock_ip(ip_address, reason=f"emergency override by {operator}")
+    except Exception as exc:
+        print(f"[RESPONSE] firewall adapter: {exc}")
 
     print(f"[EMERGENCY OVERRIDE] Blocked IP list updated. Target: {ip_address if ip_address else 'ALL'}")
 

@@ -1,6 +1,7 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 const { faker } = require('@faker-js/faker');
 
@@ -9,7 +10,30 @@ app.use(express.json());
 
 const dbDir = '../data';
 if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir);
-fs.writeFileSync('../data/app.db', 'MOCK DB FOR DEMO');
+// (the sentinel's SQLite database lives in ../data/app.db; this mock EHR app does not touch it)
+
+// ---------------------------------------------------------------------------
+// Event signing: every line written to events.jsonl carries an HMAC so the sentinel can reject
+// events from anything that is not a trusted sensor. Key: SENTIHEALTH_EVENT_KEY (hex) from
+// scripts/export_sensor_key.py, or the local vault when running on the same host.
+// ---------------------------------------------------------------------------
+function loadEventKey() {
+  const hex = (process.env.SENTIHEALTH_EVENT_KEY || '').trim();
+  if (hex) return Buffer.from(hex, 'hex');
+  try {
+    const vault = JSON.parse(fs.readFileSync(path.join('..', 'config', '.secrets_vault.json'), 'utf8'));
+    if (vault.EVENT_SIGNING_KEY) return Buffer.from(vault.EVENT_SIGNING_KEY, 'hex');
+  } catch (_) {}
+  console.warn('[webapp] no event signing key: events will be UNSIGNED and the sentinel will drop them unless SENTIHEALTH_REQUIRE_SIGNED_EVENTS=0');
+  return null;
+}
+const EVENT_KEY = loadEventKey();
+function signedLine(obj) {
+  const text = JSON.stringify(obj);
+  if (!EVENT_KEY) return text + '\n';
+  const sig = crypto.createHmac('sha256', EVENT_KEY).update(text, 'utf8').digest('hex');
+  return text + '\tsig=' + sig + '\n';
+}
 
 // ---------------------------------------------------------------------------
 // Real patient pool (served to legitimate users)
@@ -154,9 +178,10 @@ app.use((req, res, next) => {
     if (state.loginFails >= 5) attackType = 'brute_force';
     if (features.data_export_volume_kb > 1000) attackType = 'exfiltration';
 
+    const nowIso = new Date().toISOString();
     const log = {
       event_id: uuidv4(),
-      timestamp: new Date().toISOString(),
+      timestamp: nowIso,
       endpoint: req.path,
       method: req.method,
       user_id: userId,
@@ -167,8 +192,22 @@ app.use((req, res, next) => {
       session_id: sessionId,
       mirage_mode: req._mirage ? req._mirage.mode : 'none',
       features: { ...features, attack_type: attackType, asset_type: isEhrEndpoint ? 'ehr' : 'workstation', user_id: userId },
+      // Raw per-request counts for this minute. The sentinel keeps the history per user/IP and builds
+      // the 5-minute / 1-hour / 24-hour features itself, so the live scores match the evaluated model.
+      raw: {
+        ts: nowIso, user_id: userId, role: req.headers['user-role'] || 'unknown', ip,
+        logins: req.path === '/login' ? 1 : 0,
+        login_failures: (req.path === '/login' && res.statusCode === 401) ? 1 : 0,
+        ehr_reads: isEhrEndpoint ? 1 : 0,
+        export_kb: Math.round((responseSize / 1024) * 100) / 100,
+        requests: 1,
+        distinct_endpoints: state.endpoints.size,
+        internal_hosts: 1,
+        cpu_usage: features.cpu_usage,
+        mem_spike: features.memory_spike,
+      },
     };
-    try { fs.appendFileSync('../logs/events.jsonl', JSON.stringify(log) + '\n'); } catch (_) {}
+    try { fs.appendFileSync('../logs/events.jsonl', signedLine(log)); } catch (_) {}
 
     // Reset window counters every 60 s so signals don't accumulate unboundedly
     if (Date.now() - state.lastFlush > IP_WINDOW_MS) {
@@ -234,6 +273,9 @@ app.get('/records/:id', (req, res) => {
 
 app.get('/health', (req, res) =>
   res.status(200).json({ status: 'ok', uptime: process.uptime() })
+);
+app.get('/healthz', (req, res) =>
+  res.status(200).json({ status: 'ok', service: 'ehr-webapp', signing: !!EVENT_KEY, uptime: process.uptime() })
 );
 
 // ---------------------------------------------------------------------------

@@ -49,6 +49,12 @@ def _bootstrap_chain():
                 json.dump([genesis], f, indent=2)
             os.replace(tmp, path)
         print(f"[CHAIN] Hardened genesis block created -> {AUDIT_CHAIN} & {AUDIT_CHAIN_REPLICA}")
+    elif not os.path.exists(AUDIT_CHAIN_REPLICA):
+        # The replica is per-install state (not in git). Recreate it from the primary so a fresh
+        # checkout or a restored backup does not start in the HALTED state.
+        import shutil as _shutil
+        _shutil.copyfile(AUDIT_CHAIN, AUDIT_CHAIN_REPLICA)
+        print(f"[CHAIN] Replica was missing; recreated from the primary chain -> {AUDIT_CHAIN_REPLICA}")
 
 _bootstrap_chain()
 
@@ -168,6 +174,11 @@ def throttle_bandwidth(percent=1):
     os.makedirs(LOGS_DIR, exist_ok=True)
     with open(NETWORK_ACTIONS, 'a') as f:
         f.write(f"{datetime.now()} -- Bandwidth throttled to {percent}%\n")
+    try:
+        from response_adapters import FirewallAdapter
+        FirewallAdapter().throttle(percent, reason="High-tier containment")
+    except Exception as exc:
+        print(f"[RESPONSE] throttle adapter: {exc}")
 
 
 def snapshot_database():
@@ -207,6 +218,11 @@ def lock_account(user_id: str):
     if user_id in locked:
         print(f"[*] Account {user_id} already locked.")
         return
+    try:
+        from response_adapters import DirectoryAdapter
+        DirectoryAdapter().lock_account(user_id, reason="tiered response")
+    except Exception as exc:
+        print(f"[RESPONSE] directory adapter: {exc}")
     entry = {"user_id": user_id, "username": user_id, "status": "locked",
              "time": datetime.now(timezone.utc).isoformat(), "source": "self_healing_responder"}
     if is_array:
@@ -230,6 +246,11 @@ def block_ip(ip_address: str):
         return
     with open(BLOCKED_IPS, 'a') as f:
         f.write(json.dumps({"ip": ip_address, "time": datetime.now(timezone.utc).isoformat()}) + "\n")
+    try:
+        from response_adapters import FirewallAdapter
+        FirewallAdapter().block_ip(ip_address, reason="tiered response")
+    except Exception as exc:
+        print(f"[RESPONSE] firewall adapter: {exc}")
 
 
 # ---------------------------------------------------------------------------
@@ -454,3 +475,37 @@ def respond(
     _write_chain_atomic(chain)  # atomic: no partial-write corruption
 
     return result
+
+
+# ---------------------------------------------------------------------------
+# Administrative actions on the chain (snooze, release, reveal, labels, reports)
+# ---------------------------------------------------------------------------
+def append_admin_block(action: str, payload: dict, operator: str) -> dict:
+    """Append one HMAC-signed block describing an administrative action to both chain files.
+    Uses the same hash and HMAC construction the verifier checks."""
+    if not os.path.exists(AUDIT_CHAIN) and not os.path.exists(AUDIT_CHAIN_REPLICA):
+        _bootstrap_chain()
+    ts = datetime.now(timezone.utc).isoformat()
+    written = None
+    for path in (AUDIT_CHAIN, AUDIT_CHAIN_REPLICA):
+        if not os.path.exists(path):
+            continue
+        with open(path, 'r') as f:
+            chain = json.load(f)
+        prev_hash = chain[-1]['entry_hash']
+        entry = {
+            "block_index": len(chain),
+            "event_id": f"admin_{action}_{len(chain)}",
+            "timestamp": ts,
+            "tier": "Admin",
+            "action": action,
+            "operator": operator,
+            "prev_hash": prev_hash,
+            "details": {k: v for k, v in (payload or {}).items() if isinstance(v, (str, int, float, bool)) or v is None},
+        }
+        entry["entry_hash"] = hashlib.sha256((prev_hash + json.dumps(entry, sort_keys=True)).encode()).hexdigest()
+        entry["block_hmac"] = _block_hmac(entry, SESSION_SECRET)
+        chain.append(entry)
+        _write_chain_atomic(chain, path)
+        written = entry
+    return written or {}

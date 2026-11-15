@@ -51,6 +51,32 @@ for p in (_HERE, _ROOT):
 from _paths import DATA_DIR, MODELS_DIR  # noqa: E402
 from features import FEATURE_NAMES, build_feature_table  # noqa: E402
 from cost_matrix import COST  # noqa: E402
+from drift import training_stats  # noqa: E402
+import shutil  # noqa: E402
+
+# how the legacy eight features are read off the windowed ones (mirrors features.legacy_eight)
+_LEGACY_MAP = {'failed_logins': 'f5_login_failures', 'cpu_usage': 'f5_cpu_max', 'memory_spike': 'f5_mem_spike',
+               'ehr_access_per_hour': 'f1h_ehr_reads', 'lateral_movement_events': 'f1h_internal_hosts_max',
+               'data_export_volume_kb': 'f1h_export_kb', 'access_time_deviation': 'offshift_score',
+               'source_ip_reputation': 'ip_reputation'}
+
+
+def archive_previous(models_dir: str) -> str | None:
+    """Move the current model set into models/archive/<trained_at>/ so it can be rolled back to."""
+    spec_path = os.path.join(models_dir, "feature_spec.json")
+    if not os.path.exists(spec_path):
+        return None
+    try:
+        version = json.load(open(spec_path)).get("trained_at", "unknown").replace(":", "-")
+    except (json.JSONDecodeError, OSError):
+        return None
+    dest = os.path.join(models_dir, "archive", version)
+    os.makedirs(dest, exist_ok=True)
+    for name in os.listdir(models_dir):
+        src = os.path.join(models_dir, name)
+        if os.path.isfile(src) and (name.endswith(".pkl") or name in ("feature_spec.json", "model_manifest.json", "decision_policy.json")):
+            shutil.copy2(src, os.path.join(dest, name))
+    return dest
 
 TIERS = ["Low", "Medium", "High"]
 LEGACY_WEIGHTS = {'rf': 0.25, 'gb': 0.20, 'svm': 0.20, 'lr': 0.15, 'xgb': 0.20}
@@ -113,6 +139,9 @@ def main() -> None:
     print(f"train tier counts {np.bincount(y_all[tr], minlength=3).tolist()}  test tier counts {np.bincount(y_all[te], minlength=3).tolist()}")
 
     os.makedirs(MODELS_DIR, exist_ok=True)
+    archived = archive_previous(MODELS_DIR)
+    if archived:
+        print(f"previous models archived to {archived}")
     manifest: dict[str, str] = {}
 
     # ---------------------------------------------------------------- 1. XGBoost + calibration
@@ -217,6 +246,8 @@ def main() -> None:
         "split": {"train_end": sp["train_end"], "val_end": sp["val_end"],
                   "n_train": int(tr.sum()), "n_val": int(va.sum()), "n_test": int(te.sum())},
         "trained_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        # distribution of the legacy eight features over the training period, for ml/drift.py
+        "feature_stats": training_stats({k: F.loc[tr, col].to_numpy(dtype=float) for k, col in _LEGACY_MAP.items()}),
         "versions": {"python": sys.version.split()[0], "numpy": np.__version__, "pandas": pd.__version__,
                      "sklearn": __import__("sklearn").__version__, "xgboost": __import__("xgboost").__version__},
     }
@@ -224,6 +255,19 @@ def main() -> None:
         json.dump(spec, f, indent=2)
     with open(os.path.join(MODELS_DIR, "model_manifest.json"), "w") as f:
         json.dump(manifest, f, indent=2)
+    # model registry: one line per training run, newest last (scripts/model_rollback.py reads it)
+    reg_path = os.path.join(MODELS_DIR, "registry.json")
+    registry = []
+    if os.path.exists(reg_path):
+        try:
+            registry = json.load(open(reg_path))
+        except (json.JSONDecodeError, OSError):
+            registry = []
+    registry.append({"version": spec["trained_at"], "supervised_model": supervised_choice, "manifest": manifest,
+                     "val_macro_f1": {"xgb": float(best[0]), "rf": float(rf_f1)}, "n_train": int(tr.sum()),
+                     "holdout_family": a.holdout_family, "archived_previous": archived})
+    with open(reg_path, "w") as f:
+        json.dump(registry, f, indent=2)
     F[["entity", "ts", "split"]].to_csv(os.path.join(DATA_DIR, "splits_sim.csv.gz"), index=False, compression="gzip")
     print("saved:", ", ".join(manifest), "-> models/ ; feature_spec.json ; data/splits_sim.csv.gz")
 

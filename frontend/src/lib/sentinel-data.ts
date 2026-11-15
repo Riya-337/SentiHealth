@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { apiFetch, apiUrl, isDemoMode } from "@/lib/api";
+import { apiFetch, isDemoMode, openStream } from "@/lib/api";
 
 export type Tier = "High" | "Medium" | "Low";
 export type Action = "pending" | "resolved" | "auto-locked" | "forensics_generated" | "denied" | "blocked" | "admin_released";
@@ -366,7 +366,7 @@ export function useSentinel(autoRefresh = true): SentinelSnapshot {
 
     if (!token) return;
 
-    const es = new EventSource(apiUrl(`/api/stream?token=${encodeURIComponent(token)}`));
+    const es = openStream();   // one-time ticket; no session token in the URL
 
     es.addEventListener("threat_update", (e: MessageEvent) => {
       try {

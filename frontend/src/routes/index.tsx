@@ -201,7 +201,14 @@ type Stage = "login" | "otp" | "granted" | "suspended";function LoginPage() {
     if (typeof window !== "undefined" && sessionStorage.getItem("emergencyAccessLocked") === "true") {
       setStage("suspended");
     }
-  }, []);
+    // first run: the admin password is still the default -> send the user to the setup wizard
+    apiFetch("/api/setup/status")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { needs_setup?: boolean } | null) => {
+        if (d?.needs_setup) router.navigate({ to: "/setup" });
+      })
+      .catch(() => {});
+  }, [router]);
 
   useEffect(() => {
     if (!isLocked) return;

@@ -19,6 +19,7 @@ import hashlib
 import hmac as _hmac
 import json
 import os
+import re
 import sys
 import random
 import secrets
@@ -110,38 +111,89 @@ def _check_password(password: str, stored: str) -> bool:
 # ---------------------------------------------------------------------------
 
 app = Flask(__name__)
+# Browsers may call the API only from these origins (the dashboard's dev server, a local build, and
+# whatever SENTIHEALTH_ALLOWED_ORIGINS adds, e.g. the Vercel site). No wildcard.
+_ALLOWED_ORIGINS = [o.strip() for o in os.environ.get(
+    "SENTIHEALTH_ALLOWED_ORIGINS",
+    "http://localhost:8000,http://127.0.0.1:8000,http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173",
+).split(",") if o.strip()]
 if _has_cors:
-    CORS(app, resources={r"/api/*": {"origins": "*"}})
+    CORS(app, resources={r"/api/*": {"origins": _ALLOWED_ORIGINS}}, supports_credentials=False)
 
 # ---------------------------------------------------------------------------
 # Session store  (token -> {username, role, is_admin, created_at})
 # ---------------------------------------------------------------------------
 
-_sessions: dict[str, dict] = {}
-_sessions_lock = threading.Lock()
+# Sessions are stored (hashed) in SQLite, so they survive restarts and are shared between worker
+# processes. 8 h absolute lifetime, 30 min idle timeout. See security/sessions.py.
+from sessions import SessionStore as _SessionStore
+_session_store = _SessionStore()
 
 
 def _create_session(username: str, is_admin: bool) -> str:
-    token = secrets.token_hex(32)
-    with _sessions_lock:
-        _sessions[token] = {
-            "username": username,
-            "is_admin": is_admin,
-            "created_at": time.time(),
-        }
-    return token
+    return _session_store.create(username, is_admin)
 
 
 def _get_session(token: str) -> dict | None:
-    with _sessions_lock:
-        sess = _sessions.get(token)
-        if sess is None:
-            return None
-        # 8-hour session expiry
-        if time.time() - sess["created_at"] > 8 * 3600:
-            _sessions.pop(token, None)
-            return None
-        return sess
+    return _session_store.get(token)
+
+
+# ---------------------------------------------------------------------------
+# Per-IP rate limiting for API routes and a small JSON body validator
+# ---------------------------------------------------------------------------
+_rl_buckets: dict[tuple[str, str], list[float]] = {}
+_rl_lock = threading.Lock()
+
+
+def _rate_limit(per_minute: int):
+    """Allow at most per_minute calls of the decorated route per client IP."""
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwargs):
+            key = (fn.__name__, request.remote_addr or "?")
+            now = time.time()
+            with _rl_lock:
+                hist = [t for t in _rl_buckets.get(key, []) if now - t < 60]
+                if len(hist) >= per_minute:
+                    _rl_buckets[key] = hist
+                    return jsonify({"success": False, "message": "Too many requests; try again in a minute."}), 429
+                hist.append(now)
+                _rl_buckets[key] = hist
+            return fn(*args, **kwargs)
+        return wrapper
+    return decorator
+
+
+def _json_body(spec: dict) -> tuple[dict | None, tuple | None]:
+    """spec: {field: (type, limit, required)}. For str the limit is the max length, for numbers the
+    max absolute value. Returns (clean_data, None) or (None, (response, status))."""
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return None, (jsonify({"success": False, "message": "A JSON object body is required."}), 400)
+    out: dict = {}
+    for name, (typ, limit, required) in spec.items():
+        v = data.get(name)
+        if v is None or (isinstance(v, str) and not v.strip() and required):
+            if required:
+                return None, (jsonify({"success": False, "message": f"'{name}' is required."}), 400)
+            continue
+        if typ is str:
+            if not isinstance(v, str) or len(v) > limit:
+                return None, (jsonify({"success": False, "message": f"'{name}' must be a string of at most {limit} characters."}), 400)
+            out[name] = v.strip()
+        elif typ is bool:
+            if not isinstance(v, bool):
+                return None, (jsonify({"success": False, "message": f"'{name}' must be true or false."}), 400)
+            out[name] = v
+        else:
+            try:
+                num = float(v)
+            except (TypeError, ValueError):
+                return None, (jsonify({"success": False, "message": f"'{name}' must be a number."}), 400)
+            if abs(num) > limit:
+                return None, (jsonify({"success": False, "message": f"'{name}' is out of range."}), 400)
+            out[name] = num
+    return out, None
 
 
 def _require_auth(admin_only: bool = False):
@@ -150,10 +202,11 @@ def _require_auth(admin_only: bool = False):
         @wraps(fn)
         def wrapper(*args, **kwargs):
             auth = request.headers.get("Authorization", "")
-            if auth.startswith("Bearer "):
-                token = auth[7:].strip()
-            else:
-                token = request.args.get("token", "").strip()
+            token = auth[7:].strip() if auth.startswith("Bearer ") else ""
+            # EventSource cannot set headers, so the stream route exchanges a one-time ticket
+            # (issued to an authenticated session, valid 60 s) instead of putting the token in the URL.
+            if not token and request.endpoint == "api_stream":
+                token = _redeem_stream_ticket(request.args.get("ticket", "").strip())
 
             sess = _get_session(token)
             if sess is None:
@@ -164,6 +217,32 @@ def _require_auth(admin_only: bool = False):
             return fn(*args, **kwargs)
         return wrapper
     return decorator
+
+
+_stream_tickets: dict[str, tuple[str, float]] = {}   # ticket -> (session token, issued_at)
+_stream_tickets_lock = threading.Lock()
+STREAM_TICKET_TTL_SEC = 60
+
+
+def _issue_stream_ticket(session_token: str) -> str:
+    ticket = secrets.token_urlsafe(24)
+    now = time.time()
+    with _stream_tickets_lock:
+        for t, (_tok, issued) in list(_stream_tickets.items()):
+            if now - issued > STREAM_TICKET_TTL_SEC:
+                _stream_tickets.pop(t, None)
+        _stream_tickets[ticket] = (session_token, now)
+    return ticket
+
+
+def _redeem_stream_ticket(ticket: str) -> str:
+    if not ticket:
+        return ""
+    with _stream_tickets_lock:
+        entry = _stream_tickets.pop(ticket, None)   # single use
+    if entry is None or time.time() - entry[1] > STREAM_TICKET_TTL_SEC:
+        return ""
+    return entry[0]
 
 
 # ---------------------------------------------------------------------------
@@ -361,13 +440,17 @@ def _push_sse(event_type: str, data: dict):
 # ---------------------------------------------------------------------------
 
 @app.route("/api/auth/register", methods=["POST"])
+@_rate_limit(5)
 def api_register():
-    data = request.json or {}
-    username = data.get("username", "").strip()
-    password = data.get("password", "").strip()
-
-    if not username or not password:
-        return jsonify({"success": False, "message": "Username and password required."}), 400
+    data, err = _json_body({"username": (str, 64, True), "password": (str, 256, True)})
+    if err:
+        return err
+    username = data["username"]
+    password = data["password"]
+    if not re.fullmatch(r"[A-Za-z0-9._@-]{3,64}", username):
+        return jsonify({"success": False, "message": "Username: 3-64 letters, digits, . _ @ -"}), 400
+    if len(password) < 10:
+        return jsonify({"success": False, "message": "Password must be at least 10 characters."}), 400
 
     users = load_users()
     if username in users:
@@ -524,14 +607,14 @@ def apply_security_headers(response):
 
 
 @app.route("/api/auth/login", methods=["POST"])
+@_rate_limit(20)
 def api_login():
-    data = request.json or {}
-    username = data.get("username", "").strip()
-    password = data.get("password", "").strip()
+    data, err = _json_body({"username": (str, 64, True), "password": (str, 256, True)})
+    if err:
+        return err
+    username = data["username"]
+    password = data["password"]
     client_ip = request.remote_addr or "127.0.0.1"
-
-    if not username or not password:
-        return jsonify({"success": False, "message": "Username and password required."}), 400
 
     # ── Check Rate Limiting & Account Lockout ─────────────────────────────
     is_locked, lock_msg = _is_rate_limited_or_locked(username, client_ip)
@@ -616,25 +699,25 @@ def api_login():
             "otp_channel": "server_console",
         })
 
-    # Regular approved user -- uses static access code
+    # Regular approved user: authenticator app if enrolled, otherwise the legacy static access code
     return jsonify({
         "success": True,
         "stage": "otp",
         "username": username,
         "is_admin": False,
-        "otp_channel": "static_code",
+        "otp_channel": "authenticator" if user.get("totp_secret") else "static_code",
     })
 
 
 @app.route("/api/auth/verify-otp", methods=["POST"])
+@_rate_limit(20)
 def api_verify_otp():
-    data = request.json or {}
-    username = data.get("username", "").strip()
-    code = data.get("code", "").strip()
+    data, err = _json_body({"username": (str, 64, True), "code": (str, 16, True)})
+    if err:
+        return err
+    username = data["username"]
+    code = data["code"]
     client_ip = request.remote_addr or "127.0.0.1"
-
-    if not username or not code:
-        return jsonify({"success": False, "message": "Username and code required."}), 400
 
     # ── Check Rate Limiting & Account Lockout ─────────────────────────────
     is_locked, lock_msg = _is_rate_limited_or_locked(username, client_ip)
@@ -657,9 +740,14 @@ def api_verify_otp():
                 return jsonify({"success": False, "message": "Invalid MFA TOTP or backup recovery code."}), 401
             _active_otps.pop(username, None)
 
+    elif user.get("totp_secret"):
+        with _otps_lock:
+            if not _verify_mfa_code(username, code, user):
+                _record_failed_attempt(username, client_ip)
+                return jsonify({"success": False, "message": "Invalid authenticator or backup code."}), 401
     else:
         expected = user.get("access_code")
-        if not expected or code != expected:
+        if not expected or not _hmac.compare_digest(str(expected), code):
             _record_failed_attempt(username, client_ip)
             return jsonify({"success": False, "message": "Incorrect access code."}), 401
 
@@ -718,6 +806,103 @@ def api_metrics():
 
 
 # ---------------------------------------------------------------------------
+# MFA enrolment (QR code), first-run setup wizard, logout, stream tickets
+# ---------------------------------------------------------------------------
+DEFAULT_ADMIN_PASSWORD = "adminpass123"
+
+
+def _qr_svg(text: str) -> str:
+    try:
+        import segno
+        return segno.make(text, error="m").svg_inline(scale=5, dark="#111827", light=None)
+    except Exception:
+        return ""
+
+
+def _enrol_mfa(username: str, user: dict) -> dict:
+    """Generate a fresh TOTP secret and backup codes for the user record (caller saves)."""
+    secret = _generate_totp_secret()
+    raw_codes, hashed = _generate_backup_codes(8)
+    user["totp_secret"] = secret
+    user["mfa_backup_codes"] = hashed
+    uri = pyotp.TOTP(secret).provisioning_uri(name=username, issuer_name="SentiHealth") if _HAS_PYOTP else ""
+    return {"otpauth_uri": uri, "qr_svg": _qr_svg(uri) if uri else "", "backup_codes": raw_codes, "totp_secret": secret}
+
+
+def _needs_setup(users: dict) -> bool:
+    admin = users.get("admin")
+    if not admin:
+        return True
+    if admin.get("setup_complete"):
+        return False
+    return _check_password(DEFAULT_ADMIN_PASSWORD, admin.get("password", ""))
+
+
+@app.route("/api/setup/status")
+@_rate_limit(60)
+def api_setup_status():
+    return jsonify({"needs_setup": _needs_setup(load_users())})
+
+
+@app.route("/api/setup/complete", methods=["POST"])
+@_rate_limit(5)
+def api_setup_complete():
+    """First run only: set the admin password and show the authenticator QR + backup codes once.
+    Refused as soon as the default password has been changed."""
+    users = load_users()
+    if not _needs_setup(users):
+        return jsonify({"success": False, "message": "Setup is already complete."}), 403
+    data, err = _json_body({"password": (str, 256, True)})
+    if err:
+        return err
+    if len(data["password"]) < 12 or data["password"] == DEFAULT_ADMIN_PASSWORD:
+        return jsonify({"success": False, "message": "Choose a new password of at least 12 characters."}), 400
+    admin = users.setdefault("admin", {"role": "admin", "status": "approved", "access_code": None})
+    admin["password"] = _hash_password(data["password"])
+    enrol = _enrol_mfa("admin", admin)
+    admin["setup_complete"] = True
+    admin["setup_at"] = datetime.now(timezone.utc).isoformat()
+    save_users(users)
+    _log_to_file("[SETUP] Admin password set and TOTP enrolled through the setup wizard.")
+    return jsonify({"success": True, **enrol})
+
+
+@app.route("/api/admin/users/<username>/mfa/reset", methods=["POST"])
+@_rate_limit(10)
+@_require_auth(admin_only=True)
+def api_admin_reset_mfa(username: str):
+    """Re-enrol a user (lost phone). Shows a new QR once; old codes stop working."""
+    users = load_users()
+    if username not in users:
+        return jsonify({"success": False, "message": "User not found."}), 404
+    enrol = _enrol_mfa(username, users[username])
+    save_users(users)
+    _log_to_file(f"[MFA] '{request.session.get('username')}' reset MFA for '{username}'.")
+    return jsonify({"success": True, "username": username, **enrol})
+
+
+@app.route("/api/auth/logout", methods=["POST"])
+@_require_auth()
+def api_logout():
+    auth = request.headers.get("Authorization", "")
+    _session_store.delete(auth[7:].strip() if auth.startswith("Bearer ") else "")
+    return jsonify({"success": True})
+
+
+@app.route("/api/stream/ticket", methods=["POST"])
+@_rate_limit(30)
+@_require_auth()
+def api_stream_ticket():
+    auth = request.headers.get("Authorization", "")
+    return jsonify({"ticket": _issue_stream_ticket(auth[7:].strip()), "ttl_sec": STREAM_TICKET_TTL_SEC})
+
+
+@app.route("/healthz")
+def healthz():
+    return jsonify({"status": "ok", "service": "dashboard", "time": datetime.now(timezone.utc).isoformat(timespec="seconds")})
+
+
+# ---------------------------------------------------------------------------
 # SSHA Alert Authorization routes (admin only)
 # ---------------------------------------------------------------------------
 
@@ -746,6 +931,7 @@ def api_list_alerts():
 
 
 @app.route("/api/alerts/<incident_id>/respond", methods=["POST"])
+@_rate_limit(30)
 @_require_auth(admin_only=True)
 def api_respond_alert(incident_id: str):
     """Admin approves or denies a High-tier threat authorization challenge.
@@ -753,8 +939,10 @@ def api_respond_alert(incident_id: str):
     """
     from notifications.sentinel_notifier import resolve_challenge
 
-    data = request.json or {}
-    decision = data.get("decision", "").upper().strip()
+    data, err = _json_body({"decision": (str, 8, True), "totp_code": (str, 16, False), "code": (str, 16, False)})
+    if err:
+        return err
+    decision = data["decision"].upper()
     if decision not in ("YES", "IGNORE", "DENY"):
         return jsonify({"success": False, "message": "decision must be YES, IGNORE, or DENY"}), 400
 
@@ -801,6 +989,7 @@ def api_stasis_list():
 
 
 @app.route("/api/alerts/<incident_id>/retroactive", methods=["POST"])
+@_rate_limit(30)
 @_require_auth(admin_only=True)
 def api_retroactive_action(incident_id: str):
     """
@@ -958,30 +1147,21 @@ def api_admin_approve_user(username: str):
     if users[username]["status"] != "pending":
         return jsonify({"success": False, "message": f"User is already {users[username]['status']}."}), 400
 
-    access_code = "".join([str(random.randint(0, 9)) for _ in range(6)])
+    enrol = _enrol_mfa(username, users[username])
     users[username]["status"] = "approved"
-    users[username]["access_code"] = access_code
+    users[username]["access_code"] = None
     save_users(users)
 
     admin = request.session.get("username", "unknown")
-    print(
-        f"\n[AUTH] Admin '{admin}' approved user '{username}'. "
-        f"Access code: {access_code} (share out-of-band with the user)\n"
-    )
-    _push_sse("user_approved", {"username": username, "access_code": access_code})
+    print(f"\n[AUTH] Admin '{admin}' approved user '{username}'; TOTP enrolment generated (show the QR to the user in person).\n")
+    _push_sse("user_approved", {"username": username})
 
     try:
-        _get_notifier().send_alert(
-            f"✅ ACCOUNT APPROVED\n"
-            f"Username: {username}\n"
-            f"Access Code: {access_code}\n"
-            f"Approved by: {admin}\n"
-            f"→ Share this access code with the user for dashboard login."
-        )
+        _get_notifier().send_alert(f"✅ ACCOUNT APPROVED\nUsername: {username}\nApproved by: {admin}\n→ The user must scan the enrolment QR shown on the admin dashboard.")
     except Exception:
         pass
 
-    return jsonify({"success": True, "username": username, "access_code": access_code})
+    return jsonify({"success": True, "username": username, **enrol})
 
 
 @app.route("/api/admin/users/<username>/reject", methods=["POST"])
@@ -1241,6 +1421,220 @@ def get_system_state() -> dict:
         "all_tier_counts": all_tier_counts,
     }
 
+
+
+# ---------------------------------------------------------------------------
+# Incidents, snoozes, block release, identifier reveals, analyst labels, model health, tabletop
+# ---------------------------------------------------------------------------
+from incidents import (build_incidents, load_threats, incident_by_id, entity_timeline,
+                       set_snooze, clear_snooze, load_snoozes)
+from response_adapters import FirewallAdapter as _Firewall, status as _response_status
+from anchoring import verify_anchors as _verify_anchors
+from drift import drift_report as _drift_report
+from _paths import RETRAINING_QUEUE as _RETRAINING_QUEUE, RETRAINING_DIR as _RETRAINING_DIR
+
+
+def _audit_admin(action: str, payload: dict) -> None:
+    """Append an HMAC-signed block for an administrative action to the audit chain."""
+    try:
+        from self_healing_responder import append_admin_block
+        append_admin_block(action, payload, request.session.get("username", "unknown"))
+    except Exception as exc:
+        _log_to_file(f"[AUDIT] could not append admin block for {action}: {exc}")
+
+
+@app.route("/api/incidents")
+@_require_auth()
+def api_incidents():
+    limit = max(1, min(int(request.args.get("limit", 100)), 500))
+    return jsonify({"incidents": build_incidents(load_threats())[:limit], "snoozes": load_snoozes()})
+
+
+@app.route("/api/incidents/<iid>")
+@_require_auth()
+def api_incident(iid: str):
+    inc = incident_by_id(iid)
+    if not inc:
+        return jsonify({"success": False, "message": "Incident not found."}), 404
+    inc["timeline"] = entity_timeline(inc["ip"])
+    return jsonify(inc)
+
+
+@app.route("/api/incidents/<iid>/report")
+@_require_auth(admin_only=True)
+def api_incident_report(iid: str):
+    """Self-contained HTML incident report (no external scripts), downloadable."""
+    import html as _html
+    inc = incident_by_id(iid)
+    if not inc:
+        return jsonify({"success": False, "message": "Incident not found."}), 404
+    tl = entity_timeline(inc["ip"])
+    rows = "".join(f"<tr><td>{_html.escape(t['t'][:19])}</td><td>{_html.escape(t['tier'])}</td><td>{t['score']:.3f}</td><td>{_html.escape(t['action'])}</td></tr>" for t in tl)
+    feats = "".join(f"<li>{_html.escape(f['label'])}: {f['value']} (normal {f['normal_range'][0]}-{f['normal_range'][1]}), share {round(f['share'] * 100)} %</li>" for f in inc.get("top_features") or [])
+    doc = f"""<!doctype html><html><head><meta charset="utf-8"><title>SentiHealth incident {iid}</title>
+<style>body{{font-family:-apple-system,Segoe UI,sans-serif;margin:32px;color:#111}}table{{border-collapse:collapse}}td,th{{border:1px solid #ccc;padding:4px 8px;font-size:13px}}h1{{font-size:20px}}</style></head><body>
+<h1>SentiHealth incident report</h1>
+<p><b>Incident</b> {iid} &nbsp; <b>Source IP</b> {_html.escape(inc['ip'])} &nbsp; <b>Users</b> {_html.escape(', '.join(inc['users']) or '-')}</p>
+<p><b>Window</b> {_html.escape(inc['start'])} to {_html.escape(inc['end'])} ({inc['n_events']} events) &nbsp; <b>Peak</b> {_html.escape(inc['peak_tier'])} {inc['peak_score']:.3f} &nbsp; <b>Status</b> {_html.escape(inc['status'])} &nbsp; <b>Blocked now</b> {'yes' if inc['blocked'] else 'no'}</p>
+<p><b>Explanation of the peak event</b><br>{_html.escape(inc.get('reason') or '-')}</p>
+<ul>{feats}</ul>
+<h2>Timeline</h2><table><tr><th>Time (UTC)</th><th>Tier</th><th>Score</th><th>Action</th></tr>{rows}</table>
+<p style="color:#666;font-size:12px">Generated {datetime.now(timezone.utc).isoformat(timespec='seconds')} by {_html.escape(request.session.get('username', ''))}. Detection results are produced by the SentiHealth models; see evaluation/REPORT.md for their measured accuracy.</p>
+</body></html>"""
+    _audit_admin("incident_report", {"incident_id": iid, "ip": inc["ip"]})
+    return Response(doc, mimetype="text/html", headers={"Content-Disposition": f'attachment; filename="sentihealth_incident_{iid}.html"'})
+
+
+@app.route("/api/entities/<ip>/timeline")
+@_require_auth()
+def api_entity_timeline(ip: str):
+    return jsonify({"ip": ip, "timeline": entity_timeline(ip), "snooze": load_snoozes().get(ip)})
+
+
+@app.route("/api/entities/<ip>/snooze", methods=["POST", "DELETE"])
+@_rate_limit(30)
+@_require_auth(admin_only=True)
+def api_snooze(ip: str):
+    if request.method == "DELETE":
+        removed = clear_snooze(ip)
+        _audit_admin("unsnooze", {"ip": ip})
+        return jsonify({"success": True, "removed": removed})
+    data, err = _json_body({"hours": (float, 72, True), "reason": (str, 300, True)})
+    if err:
+        return err
+    entry = set_snooze(ip, data["hours"], data["reason"], request.session.get("username", "unknown"))
+    _audit_admin("snooze", {"ip": ip, "hours": data["hours"], "reason": data["reason"]})
+    _push_sse("snooze_changed", {"ip": ip, "snooze": entry})
+    return jsonify({"success": True, "snooze": entry})
+
+
+@app.route("/api/blocked/<ip>/release", methods=["POST"])
+@_rate_limit(30)
+@_require_auth(admin_only=True)
+def api_release_block(ip: str):
+    """Undo a block from the dashboard. Step-up MFA, reason recorded, chain block written."""
+    data, err = _json_body({"totp_code": (str, 16, True), "reason": (str, 300, False)})
+    if err:
+        return err
+    admin = request.session.get("username", "admin")
+    if not _verify_mfa_code(admin, data["totp_code"], load_users().get(admin, {})):
+        return jsonify({"success": False, "message": "Step-up MFA failed."}), 401
+    removed = False
+    if os.path.exists(BLOCKED_IPS):
+        with open(BLOCKED_IPS, "r", encoding="utf-8") as f:
+            lines = [l for l in f if l.strip()]
+        keep = []
+        for l in lines:
+            try:
+                if json.loads(l).get("ip") == ip:
+                    removed = True
+                    continue
+            except json.JSONDecodeError:
+                pass
+            keep.append(l if l.endswith("\n") else l + "\n")
+        with open(BLOCKED_IPS, "w", encoding="utf-8") as f:
+            f.writelines(keep)
+    if os.path.exists(THREAT_LOG):
+        with open(THREAT_LOG, "r", encoding="utf-8") as f:
+            all_lines = f.readlines()
+        changed = False
+        for i in range(len(all_lines) - 1, -1, -1):
+            if not all_lines[i].strip():
+                continue
+            try:
+                entry = json.loads(all_lines[i])
+            except json.JSONDecodeError:
+                continue
+            if entry.get("ip") == ip and entry.get("action") in ("blocked", "auto-locked", "forensics_generated", "pending"):
+                entry["action"] = "admin_released"
+                entry["reviewed_by"] = admin
+                entry["reviewed_at"] = datetime.now(timezone.utc).isoformat()
+                all_lines[i] = json.dumps(entry) + "\n"
+                changed = True
+                break
+        if changed:
+            with open(THREAT_LOG, "w", encoding="utf-8") as f:
+                f.writelines(all_lines)
+    fw = _Firewall().unblock_ip(ip, reason=f"released by {admin}: {data.get('reason', '')}")
+    _audit_admin("release_block", {"ip": ip, "reason": data.get("reason", ""), "firewall": fw.get("detail", "")})
+    _push_sse("block_released", {"ip": ip, "by": admin})
+    _log_to_file(f"[RELEASE] '{admin}' released block on {ip}: {data.get('reason', '')}")
+    return jsonify({"success": True, "ip": ip, "removed_from_blocklist": removed, "firewall": fw})
+
+
+@app.route("/api/audit/reveal", methods=["POST"])
+@_rate_limit(60)
+@_require_auth()
+def api_reveal():
+    """The dashboard shows identifiers pseudonymised; revealing one is itself an audited event."""
+    data, err = _json_body({"identifier": (str, 128, True), "context": (str, 128, False)})
+    if err:
+        return err
+    _audit_admin("reveal_identifier", {"identifier": data["identifier"], "context": data.get("context", "")})
+    return jsonify({"success": True})
+
+
+@app.route("/api/review", methods=["POST"])
+@_rate_limit(30)
+@_require_auth(admin_only=True)
+def api_review():
+    """Analyst label for an incident -> retraining queue (core/review_queue.py applies the poisoning check)."""
+    data, err = _json_body({"incident_id": (str, 32, True), "label": (str, 16, True), "note": (str, 300, False)})
+    if err:
+        return err
+    if data["label"] not in ("benign", "attack"):
+        return jsonify({"success": False, "message": "label must be 'benign' or 'attack'."}), 400
+    inc = incident_by_id(data["incident_id"])
+    if not inc:
+        return jsonify({"success": False, "message": "Incident not found."}), 404
+    peak = next((e for e in load_threats() if e.get("ip") == inc["ip"] and e.get("timestamp") == inc.get("peak_timestamp")), {})
+    entry = {
+        "source": "dashboard", "incident_id": inc["id"], "ip": inc["ip"], "label": data["label"],
+        "tier_label": 0 if data["label"] == "benign" else 2, "model_tier": inc["peak_tier"], "score": inc["peak_score"],
+        "features": peak.get("feature_values", {}), "note": data.get("note", ""),
+        "by": request.session.get("username", "unknown"), "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    }
+    os.makedirs(_RETRAINING_DIR, exist_ok=True)
+    queue = []
+    if os.path.exists(_RETRAINING_QUEUE):
+        try:
+            queue = json.load(open(_RETRAINING_QUEUE))
+        except (json.JSONDecodeError, OSError):
+            queue = []
+    queue.append(entry)
+    with open(_RETRAINING_QUEUE, "w", encoding="utf-8") as f:
+        json.dump(queue, f, indent=2)
+    _audit_admin("analyst_label", {"incident_id": inc["id"], "ip": inc["ip"], "label": data["label"]})
+    return jsonify({"success": True, "queued": len(queue)})
+
+
+@app.route("/api/ml/health")
+@_require_auth(admin_only=True)
+def api_ml_health():
+    return jsonify({"drift": _drift_report(), "anchors": _verify_anchors(), "response": _response_status()})
+
+
+_SIMULATIONS = {"brute_force", "ddos", "exfiltration", "port_scan"}
+
+
+@app.route("/api/admin/simulate/<name>", methods=["POST"])
+@_rate_limit(5)
+@_require_auth(admin_only=True)
+def api_simulate(name: str):
+    """Tabletop mode: run one of the bundled attack simulators against this installation.
+    The sentinel must run with SENTIHEALTH_TEST_MODE=1 to accept the simulator's events."""
+    import subprocess
+    if name not in _SIMULATIONS:
+        return jsonify({"success": False, "message": f"unknown simulation; choose one of {sorted(_SIMULATIONS)}"}), 400
+    script = _p("attack_scripts", f"{name}.py")
+    if not os.path.exists(script):
+        return jsonify({"success": False, "message": "simulator script missing"}), 404
+    try:
+        subprocess.Popen([sys.executable, script], cwd=_PROJECT_ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except OSError as exc:
+        return jsonify({"success": False, "message": str(exc)}), 500
+    _audit_admin("tabletop_simulation", {"simulation": name})
+    return jsonify({"success": True, "started": name, "note": "the sentinel must run with SENTIHEALTH_TEST_MODE=1 to score these events"})
 
 # ---------------------------------------------------------------------------
 # Legacy HTML dashboard (kept for terminal access)

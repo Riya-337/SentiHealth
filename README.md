@@ -298,6 +298,27 @@ If the backend is not running, the login page says the server is unreachable and
 
 ---
 
+## Hardening and operations (added November 2026)
+
+| Area | What it does | Where |
+|---|---|---|
+| **Signed events** | Every line in `logs/events.jsonl` carries an HMAC; the sentinel drops unsigned or mis-signed lines (`SENTIHEALTH_REQUIRE_SIGNED_EVENTS=0` for a lab). Export the sensor key with `python3 scripts/export_sensor_key.py`. | `security/event_signing.py`, `webapp/app.js` |
+| **Sessions in SQLite** | Hashed tokens, 8 h lifetime, 30 min idle; survive restarts. No tokens in URLs: the event stream uses one-time 60 s tickets. | `security/sessions.py`, `/api/stream/ticket` |
+| **MFA for every user** | Approving a registration enrols the user in TOTP (QR shown once); static access codes are gone. First run goes through the **setup wizard** (`/setup`) instead of printing secrets to the console. | `/api/setup/*`, `frontend/src/routes/setup.tsx` |
+| **Validation, rate limits, CORS** | Every POST body is schema-checked; per-IP limits on auth and action routes; CORS only for `SENTIHEALTH_ALLOWED_ORIGINS`. | `api/dashboard.py` |
+| **Audit-chain anchoring** | Hourly anchor of the chain head to a file an attacker on the host cannot rewrite (`SENTIHEALTH_ANCHOR_FILE`); mismatches show on the dashboard. | `security/anchoring.py`, `scripts/anchor_chain.py` |
+| **Real response adapters, dry-run first** | Blocks go to an nftables set with a TTL and automatic rollback; account locks call a directory hook (`SENTIHEALTH_LOCK_CMD`). `SENTIHEALTH_DRY_RUN=1` (default) records actions without applying them. | `core/response_adapters.py` |
+| **Raw-event ingestion** | The EHR app sends per-request raw counts; the sentinel keeps each user/IP's history and computes the same windowed features the models were trained on. | `webapp/app.js`, `core/live_sentinel.py` |
+| **Incidents and triage** | Events are grouped into incidents per source; the dashboard's triage queue has keyboard shortcuts (y/n approve or deny with step-up MFA, s snooze, u release block, b/a label, r report). | `core/incidents.py`, `frontend/src/components/dashboard/Triage.tsx` |
+| **Snooze, undo, labels, reports** | Snooze a known-benign entity with a reason (never High tier), release a block from the UI, label incidents for retraining, download a self-contained HTML report. All of these write a signed block to the audit chain. | `/api/entities/…/snooze`, `/api/blocked/…/release`, `/api/review`, `/api/incidents/…/report` |
+| **Pseudonymised display** | Identifiers are shown as pseudonyms; revealing one is itself an audited event. | `PrivacyToggle`, `/api/audit/reveal` |
+| **Model health** | Feature drift (PSI) against the training period, model registry with rollback (`scripts/model_rollback.py`), anchor status, adapter mode. | `ml/drift.py`, `/api/ml/health` |
+| **Canary watch** | Scans configured logs for minted canary tokens and alerts through the cloud-free notifier. | `scripts/canary_watch.py`, `config/canary_watch.json` |
+| **Tabletop mode** | Run the bundled attack simulations from the dashboard (sentinel in `SENTIHEALTH_TEST_MODE=1`). | `/api/admin/simulate/<name>` |
+| **Packaging and CI** | `docker compose up --build` runs every service on one host; GitHub Actions runs tests, type-check, build and dependency audits. | `docker-compose.yml`, `deploy/`, `.github/workflows/ci.yml` |
+
+Configuration lives in environment variables; see `.env.example`.
+
 ## Technologies Used
 
 | Component | Technology |

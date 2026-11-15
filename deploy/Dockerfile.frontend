@@ -1,0 +1,16 @@
+# Build the dashboard once and serve the static client with a tiny Node server (no CDN, no cloud).
+FROM node:22-alpine AS build
+WORKDIR /src
+ARG VITE_API_BASE_URL=""
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+COPY package.json package-lock.json ./
+RUN npm install --ignore-scripts --no-audit --no-fund
+COPY . .
+RUN npx vite build
+
+FROM node:22-alpine
+WORKDIR /srv
+RUN npm install -g serve@14 --no-audit --no-fund
+COPY --from=build /src/dist/client ./client
+EXPOSE 4173
+CMD ["serve", "-s", "client", "-l", "4173"]

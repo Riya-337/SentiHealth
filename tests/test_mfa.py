@@ -209,9 +209,9 @@ class TestMFA(unittest.TestCase):
                 success = unblock_ips(ip_address="192.168.1.100", operator="op_dr", reason="Emergency ER access", outage_log=True)
                 self.assertTrue(success)
 
-                # Assert IP unblocked
+                # Assert IP unblocked (the file is JSON lines, one entry per line, like the responder writes it)
                 with open(tmp_blocked, "r") as f:
-                    blocked = json.load(f)
+                    blocked = [json.loads(l) for l in f if l.strip()]
                 self.assertEqual(len(blocked), 0)
 
                 # Assert audit chain block appended with operator, reason, and outage fields

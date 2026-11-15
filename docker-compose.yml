@@ -1,0 +1,57 @@
+# SentiHealth, all services on one host. Everything stays on this machine: no image calls out.
+#
+#   docker compose up --build
+#
+# The dashboard API: http://localhost:5001   (put nginx/TLS in front for a real deployment)
+# The EHR mock app:  http://localhost:3000
+# The frontend:      http://localhost:4173   (built once; set VITE_API_BASE_URL at build time if the API is elsewhere)
+#
+# Data, logs, models and config are bind-mounted so they survive container restarts and can be backed up.
+services:
+  dashboard:
+    build: { context: ., dockerfile: deploy/Dockerfile.python }
+    command: >
+      gunicorn --chdir api --bind 0.0.0.0:5001 --worker-class gthread --workers 1 --threads 16 --timeout 0
+      --access-logfile - dashboard:app
+    environment:
+      SENTIHEALTH_ALLOWED_ORIGINS: ${SENTIHEALTH_ALLOWED_ORIGINS:-http://localhost:4173,http://localhost:8000}
+      SENTIHEALTH_DRY_RUN: ${SENTIHEALTH_DRY_RUN:-1}
+    volumes: [ "./data:/app/data", "./logs:/app/logs", "./config:/app/config", "./models:/app/models", "./evaluation:/app/evaluation" ]
+    ports: [ "5001:5001" ]
+    healthcheck: { test: ["CMD", "curl", "-fsS", "http://localhost:5001/healthz"], interval: 30s, timeout: 5s, retries: 3 }
+
+  sentinel:
+    build: { context: ., dockerfile: deploy/Dockerfile.python }
+    command: python core/live_sentinel.py
+    environment:
+      SENTIHEALTH_DRY_RUN: ${SENTIHEALTH_DRY_RUN:-1}
+      SENTIHEALTH_REQUIRE_SIGNED_EVENTS: ${SENTIHEALTH_REQUIRE_SIGNED_EVENTS:-1}
+    volumes: [ "./data:/app/data", "./logs:/app/logs", "./config:/app/config", "./models:/app/models" ]
+    depends_on: [ dashboard ]
+
+  canary-watch:
+    build: { context: ., dockerfile: deploy/Dockerfile.python }
+    command: python scripts/canary_watch.py
+    volumes: [ "./logs:/app/logs", "./config:/app/config" ]
+
+  anchor:
+    build: { context: ., dockerfile: deploy/Dockerfile.python }
+    command: sh -c "while true; do python scripts/anchor_chain.py; sleep 3600; done"
+    environment:
+      SENTIHEALTH_ANCHOR_FILE: ${SENTIHEALTH_ANCHOR_FILE:-/anchors/anchors.jsonl}
+    volumes: [ "./data:/app/data", "${SENTIHEALTH_ANCHOR_DIR:-./data/anchors}:/anchors" ]
+
+  webapp:
+    build: { context: ., dockerfile: deploy/Dockerfile.webapp }
+    environment:
+      SENTIHEALTH_EVENT_KEY: ${SENTIHEALTH_EVENT_KEY:-}
+    volumes: [ "./logs:/app/logs", "./data:/app/data", "./config:/app/config:ro" ]
+    ports: [ "3000:3000" ]
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: ../deploy/Dockerfile.frontend
+      args: { VITE_API_BASE_URL: "${VITE_API_BASE_URL:-}" }
+    ports: [ "4173:4173" ]
+    depends_on: [ dashboard ]
