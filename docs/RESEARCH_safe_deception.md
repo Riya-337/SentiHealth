@@ -55,7 +55,22 @@ Findings:
 - The same conformal construction bounds the false-alarm rate on benign flows: 9.96 % at α = 0.10, 4.93 % at 0.05, 0.85 % at 0.01.
 
 ### 3.3 CERT Insider Threat r4.2 (public benchmark)
-See `evaluation/CERT_R42.md` (per-user-day sessions, roles from the LDAP snapshots).
+
+330,285 user-days (1,000 users, 541 malicious days, 35 role groups from the LDAP snapshots). Detectors trained on the first half of the period; later days split at random into calibration and evaluation; 5 seeds. XGBoost ROC-AUC 0.998 / PR-AUC 0.893; Isolation Forest 0.890 / 0.019.
+
+| α | detector | legit days deceived, pooled | **worst role, pooled** | legit days deceived, per-role | worst role, per-role | malicious days deceived (per-role) |
+|---|---|---|---|---|---|---|
+| 0.10 | XGBoost | 0.101 | **0.376** | 0.100 | 0.114 | 0.997 |
+| 0.05 | XGBoost | 0.050 | **0.196** | 0.050 | 0.064 | 0.991 |
+| 0.01 | XGBoost | 0.010 | **0.044** | 0.010 | 0.013 | 0.957 |
+| 0.10 | Isolation Forest | 0.101 | **0.997** | 0.102 | 0.120 | 0.680 |
+| 0.05 | Isolation Forest | 0.051 | **0.914** | 0.051 | 0.062 | 0.517 |
+| 0.01 | Isolation Forest | 0.010 | **0.219** | 0.010 | 0.014 | 0.148 |
+
+Findings:
+- **A pooled threshold meets α on average while one role absorbs the harm**: with the unsupervised detector at α = 0.10, one role is deceived on 99.7 % of its normal days; even the supervised detector hits one role at 3.8 × α. Per-role thresholds keep every role close to α (the small excess of the *worst* role is the maximum over 35 noisy group estimates).
+- With the supervised detector, the per-role gate at α = 0.01 still deceives 95.7 % of malicious days.
+- Time-ordered calibration at α = 0.01: 1.02 % (XGBoost) and 0.83 % (Isolation Forest) of normal days deceived.
 
 ## 4. Claimed contributions (to be checked against the literature)
 

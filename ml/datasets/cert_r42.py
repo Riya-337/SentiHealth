@@ -75,9 +75,28 @@ def _day_and_after(date_str: str) -> tuple[str, bool]:
     return f"{y}-{m}-{d}", after
 
 
+class _Raw(io.RawIOBase):
+    """Adapter: tarfile's streaming member objects lack seekable()/readinto(), which TextIOWrapper needs."""
+    def __init__(self, f):
+        self.f = f
+    def readable(self):
+        return True
+    def seekable(self):
+        return False
+    def readinto(self, b):
+        data = self.f.read(len(b))
+        n = len(data)
+        b[:n] = data
+        return n
+
+
+def _text(fobj):
+    return io.TextIOWrapper(io.BufferedReader(_Raw(fobj), 1 << 20), encoding="utf-8", errors="ignore", newline="")
+
+
 def _aggregate_http(fobj, out_path: str) -> int:
     agg: dict[tuple[str, str], list[int]] = defaultdict(lambda: [0, 0, 0, 0, 0, 0])
-    text = io.TextIOWrapper(fobj, encoding="utf-8", errors="ignore", newline="")
+    text = _text(fobj)
     n = 0
     for row in csv.reader(text):
         if len(row) < 5 or row[0] == "id":
@@ -103,7 +122,7 @@ def _aggregate_http(fobj, out_path: str) -> int:
 
 def _email_headers(fobj, out_path: str) -> int:
     """email.csv carries full bodies; keep only id, date, user, pc, to, cc, bcc, from, size, attachments."""
-    text = io.TextIOWrapper(fobj, encoding="utf-8", errors="ignore", newline="")
+    text = _text(fobj)
     n = 0
     with open(out_path, "w", newline="") as f:
         w = csv.writer(f)
