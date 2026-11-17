@@ -1,0 +1,600 @@
+{
+  "generated_at": "2026-11-17T09:12:26+00:00",
+  "runs": [
+    {
+      "rows": 16318,
+      "attacks": 2046,
+      "seed": 0,
+      "settings": {
+        "with_identifiers": {
+          "n_features": 43,
+          "xgb": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "roc_auc": 1.0,
+            "pr_auc": 1.0,
+            "top_features": [
+              [
+                "SrcMac",
+                0.644
+              ],
+              [
+                "Flgs",
+                0.089
+              ],
+              [
+                "SrcLoad",
+                0.086
+              ],
+              [
+                "DIntPkt",
+                0.038
+              ],
+              [
+                "SIntPkt",
+                0.038
+              ]
+            ]
+          },
+          "iforest": {
+            "roc_auc": 0.7013997662060726,
+            "pr_auc": 0.4840828113607358
+          },
+          "conformal": [
+            {
+              "alpha": 0.1,
+              "tau": 0.00024408895114902407,
+              "benign_flagged": 0.09807355516637478,
+              "attacks_flagged": 1.0
+            },
+            {
+              "alpha": 0.05,
+              "tau": 0.0002626228961162269,
+              "benign_flagged": 0.05394045534150613,
+              "attacks_flagged": 1.0
+            },
+            {
+              "alpha": 0.01,
+              "tau": 0.0002934094809461385,
+              "benign_flagged": 0.009807355516637478,
+              "attacks_flagged": 1.0
+            }
+          ]
+        },
+        "without_identifiers": {
+          "n_features": 34,
+          "xgb": {
+            "precision": 0.6722689075630253,
+            "recall": 0.78239608801956,
+            "f1": 0.7231638418079096,
+            "roc_auc": 0.9480639208012367,
+            "pr_auc": 0.8389452039625961,
+            "top_features": [
+              [
+                "DIntPkt",
+                0.171
+              ],
+              [
+                "Dur",
+                0.094
+              ],
+              [
+                "DstJitter",
+                0.089
+              ],
+              [
+                "SIntPkt",
+                0.081
+              ],
+              [
+                "Temp",
+                0.047
+              ]
+            ]
+          },
+          "iforest": {
+            "roc_auc": 0.701010109660485,
+            "pr_auc": 0.47912186478071694
+          },
+          "conformal": [
+            {
+              "alpha": 0.1,
+              "tau": 0.3758857548236847,
+              "benign_flagged": 0.10087565674255691,
+              "attacks_flagged": 0.8264058679706602
+            },
+            {
+              "alpha": 0.05,
+              "tau": 0.5422212481498718,
+              "benign_flagged": 0.040630472854640984,
+              "attacks_flagged": 0.7530562347188264
+            },
+            {
+              "alpha": 0.01,
+              "tau": 0.7472597360610962,
+              "benign_flagged": 0.008056042031523642,
+              "attacks_flagged": 0.6112469437652812
+            }
+          ]
+        }
+      }
+    },
+    {
+      "rows": 16318,
+      "attacks": 2046,
+      "seed": 1,
+      "settings": {
+        "with_identifiers": {
+          "n_features": 43,
+          "xgb": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "roc_auc": 1.0,
+            "pr_auc": 1.0,
+            "top_features": [
+              [
+                "SrcMac",
+                0.772
+              ],
+              [
+                "Flgs",
+                0.109
+              ],
+              [
+                "DIntPkt",
+                0.053
+              ],
+              [
+                "Sport",
+                0.013
+              ],
+              [
+                "DstJitter",
+                0.007
+              ]
+            ]
+          },
+          "iforest": {
+            "roc_auc": 0.6941297622506708,
+            "pr_auc": 0.455558759652126
+          },
+          "conformal": [
+            {
+              "alpha": 0.1,
+              "tau": 0.0002365069231018424,
+              "benign_flagged": 0.09250175192711983,
+              "attacks_flagged": 1.0
+            },
+            {
+              "alpha": 0.05,
+              "tau": 0.0002480644907336682,
+              "benign_flagged": 0.04414856341976174,
+              "attacks_flagged": 1.0
+            },
+            {
+              "alpha": 0.01,
+              "tau": 0.00026521284598857164,
+              "benign_flagged": 0.009110021023125438,
+              "attacks_flagged": 1.0
+            }
+          ]
+        },
+        "without_identifiers": {
+          "n_features": 34,
+          "xgb": {
+            "precision": 0.6625766871165644,
+            "recall": 0.7902439024390244,
+            "f1": 0.7208008898776418,
+            "roc_auc": 0.9540559249320594,
+            "pr_auc": 0.8483856746819729,
+            "top_features": [
+              [
+                "DIntPkt",
+                0.184
+              ],
+              [
+                "SIntPkt",
+                0.085
+              ],
+              [
+                "DstJitter",
+                0.082
+              ],
+              [
+                "Resp_Rate",
+                0.047
+              ],
+              [
+                "Temp",
+                0.046
+              ]
+            ]
+          },
+          "iforest": {
+            "roc_auc": 0.6985356453073991,
+            "pr_auc": 0.4532733221629358
+          },
+          "conformal": [
+            {
+              "alpha": 0.1,
+              "tau": 0.3743627965450287,
+              "benign_flagged": 0.106166783461808,
+              "attacks_flagged": 0.8658536585365854
+            },
+            {
+              "alpha": 0.05,
+              "tau": 0.5198855400085449,
+              "benign_flagged": 0.05185704274702172,
+              "attacks_flagged": 0.7682926829268293
+            },
+            {
+              "alpha": 0.01,
+              "tau": 0.7158479690551758,
+              "benign_flagged": 0.008759635599159075,
+              "attacks_flagged": 0.6365853658536585
+            }
+          ]
+        }
+      }
+    },
+    {
+      "rows": 16318,
+      "attacks": 2046,
+      "seed": 2,
+      "settings": {
+        "with_identifiers": {
+          "n_features": 43,
+          "xgb": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "roc_auc": 1.0,
+            "pr_auc": 1.0,
+            "top_features": [
+              [
+                "SrcMac",
+                0.757
+              ],
+              [
+                "DIntPkt",
+                0.077
+              ],
+              [
+                "Flgs",
+                0.066
+              ],
+              [
+                "Dur",
+                0.02
+              ],
+              [
+                "SrcLoad",
+                0.01
+              ]
+            ]
+          },
+          "iforest": {
+            "roc_auc": 0.6998034589511815,
+            "pr_auc": 0.4946567561685624
+          },
+          "conformal": [
+            {
+              "alpha": 0.1,
+              "tau": 0.0002509074693080038,
+              "benign_flagged": 0.0914185639229422,
+              "attacks_flagged": 1.0
+            },
+            {
+              "alpha": 0.05,
+              "tau": 0.00026626428007148206,
+              "benign_flagged": 0.04903677758318739,
+              "attacks_flagged": 1.0
+            },
+            {
+              "alpha": 0.01,
+              "tau": 0.00029213944799266756,
+              "benign_flagged": 0.009807355516637478,
+              "attacks_flagged": 1.0
+            }
+          ]
+        },
+        "without_identifiers": {
+          "n_features": 34,
+          "xgb": {
+            "precision": 0.6732456140350878,
+            "recall": 0.7506112469437652,
+            "f1": 0.7098265895953757,
+            "roc_auc": 0.9439528301482836,
+            "pr_auc": 0.828044215150344,
+            "top_features": [
+              [
+                "DIntPkt",
+                0.169
+              ],
+              [
+                "DstJitter",
+                0.069
+              ],
+              [
+                "SIntPkt",
+                0.067
+              ],
+              [
+                "SIntPktAct",
+                0.051
+              ],
+              [
+                "SpO2",
+                0.049
+              ]
+            ]
+          },
+          "iforest": {
+            "roc_auc": 0.6968086700722363,
+            "pr_auc": 0.4932815169395007
+          },
+          "conformal": [
+            {
+              "alpha": 0.1,
+              "tau": 0.39309683442115784,
+              "benign_flagged": 0.09947460595446585,
+              "attacks_flagged": 0.7995110024449877
+            },
+            {
+              "alpha": 0.05,
+              "tau": 0.5314030051231384,
+              "benign_flagged": 0.044133099824868655,
+              "attacks_flagged": 0.7310513447432763
+            },
+            {
+              "alpha": 0.01,
+              "tau": 0.7475983500480652,
+              "benign_flagged": 0.004203152364273205,
+              "attacks_flagged": 0.6039119804400978
+            }
+          ]
+        }
+      }
+    },
+    {
+      "rows": 16318,
+      "attacks": 2046,
+      "seed": 3,
+      "settings": {
+        "with_identifiers": {
+          "n_features": 43,
+          "xgb": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "roc_auc": 0.9999999999999999,
+            "pr_auc": 1.0,
+            "top_features": [
+              [
+                "SrcMac",
+                0.756
+              ],
+              [
+                "Flgs",
+                0.099
+              ],
+              [
+                "DIntPkt",
+                0.055
+              ],
+              [
+                "pLoss",
+                0.021
+              ],
+              [
+                "pDstLoss",
+                0.012
+              ]
+            ]
+          },
+          "iforest": {
+            "roc_auc": 0.6792587105365699,
+            "pr_auc": 0.4675552363184513
+          },
+          "conformal": [
+            {
+              "alpha": 0.1,
+              "tau": 0.0002471543848514557,
+              "benign_flagged": 0.09632224168126094,
+              "attacks_flagged": 1.0
+            },
+            {
+              "alpha": 0.05,
+              "tau": 0.00026498991064727306,
+              "benign_flagged": 0.04203152364273205,
+              "attacks_flagged": 1.0
+            },
+            {
+              "alpha": 0.01,
+              "tau": 0.0002962204744108021,
+              "benign_flagged": 0.011208406304728547,
+              "attacks_flagged": 1.0
+            }
+          ]
+        },
+        "without_identifiers": {
+          "n_features": 34,
+          "xgb": {
+            "precision": 0.6608695652173913,
+            "recall": 0.7432762836185819,
+            "f1": 0.6996547756041427,
+            "roc_auc": 0.9438355049906011,
+            "pr_auc": 0.8094810343372554,
+            "top_features": [
+              [
+                "DIntPkt",
+                0.15
+              ],
+              [
+                "SIntPkt",
+                0.099
+              ],
+              [
+                "DstJitter",
+                0.074
+              ],
+              [
+                "pLoss",
+                0.049
+              ],
+              [
+                "pSrcLoss",
+                0.046
+              ]
+            ]
+          },
+          "iforest": {
+            "roc_auc": 0.6745759808854196,
+            "pr_auc": 0.4667500841657002
+          },
+          "conformal": [
+            {
+              "alpha": 0.1,
+              "tau": 0.41662490367889404,
+              "benign_flagged": 0.08371278458844134,
+              "attacks_flagged": 0.784841075794621
+            },
+            {
+              "alpha": 0.05,
+              "tau": 0.5401259660720825,
+              "benign_flagged": 0.047635726795096325,
+              "attacks_flagged": 0.6943765281173594
+            },
+            {
+              "alpha": 0.01,
+              "tau": 0.721854567527771,
+              "benign_flagged": 0.008756567425569177,
+              "attacks_flagged": 0.589242053789731
+            }
+          ]
+        }
+      }
+    },
+    {
+      "rows": 16318,
+      "attacks": 2046,
+      "seed": 4,
+      "settings": {
+        "with_identifiers": {
+          "n_features": 43,
+          "xgb": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "roc_auc": 1.0,
+            "pr_auc": 0.9999999999999999,
+            "top_features": [
+              [
+                "SrcMac",
+                0.739
+              ],
+              [
+                "Flgs",
+                0.144
+              ],
+              [
+                "DstJitter",
+                0.026
+              ],
+              [
+                "DIntPkt",
+                0.025
+              ],
+              [
+                "Sport",
+                0.016
+              ]
+            ]
+          },
+          "iforest": {
+            "roc_auc": 0.7278758579937399,
+            "pr_auc": 0.513144325297313
+          },
+          "conformal": [
+            {
+              "alpha": 0.1,
+              "tau": 0.00025502077187411487,
+              "benign_flagged": 0.10437828371278458,
+              "attacks_flagged": 1.0
+            },
+            {
+              "alpha": 0.05,
+              "tau": 0.0002672722621355206,
+              "benign_flagged": 0.053590192644483364,
+              "attacks_flagged": 1.0
+            },
+            {
+              "alpha": 0.01,
+              "tau": 0.0002858077350538224,
+              "benign_flagged": 0.011558669001751313,
+              "attacks_flagged": 1.0
+            }
+          ]
+        },
+        "without_identifiers": {
+          "n_features": 34,
+          "xgb": {
+            "precision": 0.6175908221797323,
+            "recall": 0.7897310513447433,
+            "f1": 0.6931330472103004,
+            "roc_auc": 0.9419664381537987,
+            "pr_auc": 0.8319297013138179,
+            "top_features": [
+              [
+                "DIntPkt",
+                0.152
+              ],
+              [
+                "pSrcLoss",
+                0.08
+              ],
+              [
+                "DstJitter",
+                0.071
+              ],
+              [
+                "SIntPkt",
+                0.049
+              ],
+              [
+                "SrcLoad",
+                0.047
+              ]
+            ]
+          },
+          "iforest": {
+            "roc_auc": 0.728715546439781,
+            "pr_auc": 0.5136500150517217
+          },
+          "conformal": [
+            {
+              "alpha": 0.1,
+              "tau": 0.39006736874580383,
+              "benign_flagged": 0.10788091068301225,
+              "attacks_flagged": 0.843520782396088
+            },
+            {
+              "alpha": 0.05,
+              "tau": 0.5222706198692322,
+              "benign_flagged": 0.06199649737302977,
+              "attacks_flagged": 0.7726161369193154
+            },
+            {
+              "alpha": 0.01,
+              "tau": 0.7305158376693726,
+              "benign_flagged": 0.012959719789842382,
+              "attacks_flagged": 0.6577017114914425
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

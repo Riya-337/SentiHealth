@@ -71,3 +71,6 @@ data/anchors.jsonl
 data/snoozes.json
 models/archive/
 models/registry.json
+
+# Public datasets (downloaded by scripts/fetch_datasets.sh; licences on their own pages)
+data/external/

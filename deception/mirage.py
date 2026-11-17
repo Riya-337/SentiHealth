@@ -23,7 +23,9 @@ Legal guardrail:
   "Hacking back" is not — this boundary is enforced in decide().
 
 Activation criteria (all must be true):
-  - ML tier is Medium or High AND raw_score >= activation_threshold.
+  - The session's running-maximum risk exceeds the conformal threshold for its role
+    (models/deception_gate.json, fitted by scripts/calibrate_deception.py). This bounds the probability
+    that a legitimate session is ever deceived by alpha; without a fitted gate, nothing is deceived.
   - Session is NOT on the clinical_allowlist.
   - source_vlan is not "clinical" OR contradiction_flags are present
     (i.e. there's positive evidence this is NOT a real clinician).
@@ -58,6 +60,29 @@ class DeceptionVerdict:
     threat_tier: str = "Low"
     raw_score: float = 0.0
     logged_as_attack: bool = False
+
+
+_GATE_PATH = os.path.join(os.path.dirname(__file__), "..", "models", "deception_gate.json")
+_RUNNING_MAX: dict[str, float] = {}
+_gate_cache: dict = {"mtime": None, "gate": None}
+
+
+def _load_gate():
+    """The conformal gate written by scripts/calibrate_deception.py (reloaded when the file changes)."""
+    try:
+        mtime = os.path.getmtime(_GATE_PATH)
+    except OSError:
+        return None
+    if _gate_cache["mtime"] != mtime:
+        import sys as _sys
+        _ml = os.path.join(os.path.dirname(__file__), "..", "ml")
+        if _ml not in _sys.path:
+            _sys.path.insert(0, _ml)
+        from safe_deception import DeceptionGate
+        with open(_GATE_PATH) as f:
+            _gate_cache["gate"] = DeceptionGate.from_json(f.read())
+        _gate_cache["mtime"] = mtime
+    return _gate_cache["gate"]
 
 
 def _load_policy() -> dict:
@@ -130,21 +155,29 @@ def decide(
         verdict.reason = "clinical_vlan_no_contradiction"
         return verdict
 
-    # --- Activation threshold check ---
-    threshold = float(policy.get("activation_threshold", 0.55))
-    if tier == "Low" or raw_score < threshold:
-        verdict.reason = f"below_threshold ({raw_score:.3f} < {threshold})"
+    # --- Conformal safety gate (ml/safe_deception.py) ---
+    # The session's RUNNING MAXIMUM risk is compared with thresholds calibrated on this installation's
+    # legitimate sessions, which bounds P(a legitimate session is ever deceived) by alpha (per role when
+    # role thresholds exist). Without a fitted gate Mirage never serves decoys: the old fixed
+    # thresholds carried no such bound.
+    gate = _load_gate()
+    group = (context or {}).get("role") or ("unauthenticated" if not user_id else None)
+    running = max(_RUNNING_MAX.get(session_id, 0.0), float(raw_score))
+    _RUNNING_MAX[session_id] = running
+    if gate is None:
+        verdict.reason = "no_calibrated_gate (run scripts/calibrate_deception.py); fail-safe: no deception"
         return verdict
-
-    # --- Decide deception level ---
-    full_threshold = float(policy.get("full_decoy_threshold", 0.75))
-
-    if raw_score >= full_threshold:
+    level = gate.level(running, group)
+    if level == "none":
+        tn, _ = gate.thresholds(group)
+        verdict.reason = f"below_conformal_threshold (session max {running:.3f} <= {tn}) alpha={gate.alpha_noise}"
+        return verdict
+    if level == "full":
         verdict.mode = "full"
         verdict.serve_decoy = True
         verdict.apply_noise = True
         verdict.apply_jitter = True
-    elif raw_score >= threshold:
+    else:
         verdict.mode = "noise_only"
         verdict.serve_decoy = False
         verdict.apply_noise = True
