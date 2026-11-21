@@ -19,6 +19,12 @@ jobs:
           pip install -r requirements.txt pytest pip-audit
       - name: Dependency audit
         run: pip-audit -r requirements.txt --progress-spinner off || echo "::warning::pip-audit reported issues"
+      # models/*.pkl are not tracked; without them the scorer falls back to a heuristic and the tier
+      # tests would check the fallback instead of the deployed model. Both steps are deterministic.
+      - name: Train models
+        run: |
+          python ml/simulate_events.py
+          python ml/train.py
       - name: Tests
         run: python -m pytest -q tests
       - name: Simulated events + feature pipeline smoke test
