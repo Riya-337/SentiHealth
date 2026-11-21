@@ -22,6 +22,7 @@ experiment  detectors trained on the first half of the period; the later user-da
 
     python3 ml/datasets/cert_r42.py extract      # once, ~20-40 min, needs ~3 GB free after deleting the archive
     python3 ml/datasets/cert_r42.py features
+    python3 ml/datasets/cert_r42.py experiment --ablation scenario_web   # without the scenario keyword features
     python3 ml/datasets/cert_r42.py experiment   -> evaluation/CERT_R42.md, evaluation/cert_r42.json
 """
 from __future__ import annotations
@@ -274,14 +275,24 @@ def build_features() -> pd.DataFrame:
 
 
 # --------------------------------------------------------------------------- experiment
-def experiment(seeds: int = 5) -> None:
+# Feature ablations. The keyword hits match the r4.2 scenarios one-to-one (1: wikileaks upload,
+# 2: job-site browsing, 3: keylogger download), so they tell the detector what the attacks look like.
+ABLATIONS = {
+    "scenario_web": ["http_wikileaks", "http_jobsite", "http_keylogger"],
+    "web_content": ["http_wikileaks", "http_jobsite", "http_keylogger", "http_cloud"],
+}
+
+
+def experiment(seeds: int = 5, ablation: str | None = None) -> None:
     from sklearn.ensemble import IsolationForest
     from sklearn.metrics import average_precision_score, roc_auc_score
     from xgboost import XGBClassifier
     from safe_deception import DeceptionGate
 
     F = pd.read_csv(os.path.join(DIR, "user_days.csv.gz"), parse_dates=["day"])
-    feats = [c for c in F.columns if c not in ("user", "day", "malicious", "role")]
+    dropped = ABLATIONS[ablation] if ablation else []
+    feats = [c for c in F.columns if c not in ("user", "day", "malicious", "role") and c not in dropped]
+    suffix = f"_no_{ablation}" if ablation else ""
     cut = F["day"].min() + (F["day"].max() - F["day"].min()) * 0.5
     tr = (F["day"] < cut).to_numpy()
     y = F["malicious"].to_numpy(bool)
@@ -333,10 +344,12 @@ def experiment(seeds: int = 5) -> None:
         print(f"seed {seed} done")
 
     os.makedirs(OUT, exist_ok=True)
-    with open(os.path.join(OUT, "cert_r42.json"), "w") as f:
-        json.dump({"generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "runs": runs}, f, indent=2)
-    md = ["# CERT Insider Threat r4.2: measured results", "",
-          f"Public synthetic benchmark (CMU SEI). {len(F):,} user-days ({int(y.sum())} malicious, {F.user.nunique()} users). "
+    with open(os.path.join(OUT, f"cert_r42{suffix}.json"), "w") as f:
+        json.dump({"generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "features": feats,
+                   "dropped": dropped, "runs": runs}, f, indent=2)
+    md = ["# CERT Insider Threat r4.2: measured results" + (f" (without {', '.join(dropped)})" if dropped else ""), "",
+          f"Public synthetic benchmark (CMU SEI). {len(F):,} user-days ({int(y.sum())} malicious, {F.user.nunique()} users), "
+          f"{len(feats)} features. "
           "Detectors trained on the first half of the period; later user-days split at random into calibration and evaluation; "
           f"mean over {seeds} seeds. 'Legit deceived' = share of normal user-days put on deception.", "",
           "| detector | ROC-AUC | PR-AUC |", "|---|---|---|"]
@@ -360,7 +373,7 @@ def experiment(seeds: int = 5) -> None:
         tl = np.mean([r[det]["temporal_0.01"]["legit_deceived"] for r in runs])
         tm = np.mean([r[det]["temporal_0.01"]["malicious_deceived"] or 0 for r in runs])
         md.append(f"\nTime-ordered calibration, alpha 0.01, per-role: legit deceived {tl:.4f}, malicious days deceived {tm:.3f}.")
-    with open(os.path.join(OUT, "CERT_R42.md"), "w") as f:
+    with open(os.path.join(OUT, f"CERT_R42{suffix.upper()}.md"), "w") as f:
         f.write("\n".join(md) + "\n")
     print("\n".join(md))
 
@@ -369,13 +382,14 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("step", choices=["extract", "features", "experiment", "all"])
     ap.add_argument("--seeds", type=int, default=5)
+    ap.add_argument("--ablation", choices=sorted(ABLATIONS), help="drop these features; results go to *_no_<ablation> files")
     a = ap.parse_args()
     if a.step in ("extract", "all"):
         extract()
     if a.step in ("features", "all"):
         build_features()
     if a.step in ("experiment", "all"):
-        experiment(a.seeds)
+        experiment(a.seeds, a.ablation)
 
 
 if __name__ == "__main__":
