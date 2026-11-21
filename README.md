@@ -8,7 +8,7 @@
 
 SentiHealth watches activity on a hospital EHR (electronic health record) server, scores every user and IP with calibrated machine-learning models, and responds in proportion to the risk: logging, throttling, account locks, or blocking after an administrator approves with MFA. Every action goes into a tamper-evident audit log.
 
-Its research contribution is **safety-bounded deception**. Serving fake patient records to an attacker is a strong defence, but serving them to a clinician by mistake can harm a patient. SentiHealth decides when to deceive with a per-role conformal gate that guarantees, for every staff role, that a legitimate session is deceived with probability at most α (for example 1 %).
+Its research contribution is **safety-bounded deception**. Serving fake patient records to an attacker is a strong defence, but serving them to a clinician by mistake can harm a patient. SentiHealth decides when to deceive with a per-role conformal gate that guarantees, for every staff role, that a legitimate session is deceived with probability at most α (for example 1 %), as long as each role's behaviour stays comparable to its calibration period. The experiments test that condition, including where it fails.
 
 > Built by [Riya Aggarwal](https://github.com/Riya-337), RV College of Engineering, Bengaluru · Unisys Innovation Program 2026: Top 50 nationally.
 
@@ -34,21 +34,21 @@ Its research contribution is **safety-bounded deception**. Serving fake patient 
 P(a legitimate session is ever deceived) ≤ α
 ```
 
-The bound covers the whole session, so the repeated per-event decisions do not add up. The full write-up, including the argument and what is *not* guaranteed, is in [`docs/research_safe_deception.md`](docs/research_safe_deception.md); the code is [`ml/safe_deception.py`](ml/safe_deception.py).
+The bound covers the whole session, so the repeated per-event decisions do not add up. Mislabelled attacks in the calibration set can loosen it, but by at most a factor of 1 + m/(n+1) for m mislabelled among n sessions. Statements and proofs: [`docs/theory.md`](docs/theory.md). Research write-up: [`docs/research_safe_deception.md`](docs/research_safe_deception.md). Positioning against prior work: [`docs/related_work.md`](docs/related_work.md). Code: [`ml/safe_deception.py`](ml/safe_deception.py).
 
-**Result on a public benchmark.** CERT Insider Threat r4.2 (330,285 user-days, 1,000 users, 541 malicious days), α = 1 %, mean of 5 seeds:
+**Results on a public benchmark.** CERT Insider Threat r4.2: 4.13 M logon, USB, file and e-mail events grouped into 1.44 M sessions, the gate re-deciding at every event. Time-ordered calibration (earlier sessions calibrate, later ones evaluate), α = 1 %, mean of 5 seeds; "significant" counts role-seeds whose rate is significantly above α:
 
-| Detector | Features | Worst role, shared threshold | Worst role, per-role gate | Malicious days deceived (per-role gate) |
-|---|---|---|---|---|
-| XGBoost | all | 4.38 % | 1.32 % | 95.7 % |
-| XGBoost | without scenario-specific web features | 3.93 % | 1.35 % | 94.9 % |
-| Isolation Forest | all | 21.89 % | 1.43 % | 14.8 % |
+| Detector | Per-role gate: worst role | Significant | Shared threshold: worst role | Significant | Malicious sessions deceived |
+|---|---|---|---|---|---|
+| Isolation Forest | 1.48 % | 0 / 195 | 13.42 % | 52 / 195 | 3.4 % |
+| XGBoost | 6.68 % | 61 / 195 | 8.48 % | 34 / 195 | 66.3 % |
 
-A single shared threshold meets α on average but lets some roles carry several times their share of false deceptions; the per-role gate keeps every role near α, whichever detector it uses. The worst role sits slightly above 1 % because it is the maximum over 35 roles, each estimated from a finite number of days. Details: [`evaluation/CERT_R42.md`](evaluation/CERT_R42.md) and the [feature ablation](evaluation/CERT_R42_NO_SCENARIO_WEB.md).
+The overall rate matches α in every setting. A shared threshold lets some roles carry many times their share of false deceptions; the per-role gate prevents this with the anomaly detector. With the supervised detector it does not: in roles with only two or three members, one person whose behaviour changes between the calibration and evaluation periods pushes the whole role above α (for example 5 of 355 sessions deceived before, 62 of 381 after). Monthly recalibration does not fix this, because it is individual rather than population drift. The detector that keeps every role safe is also the one that catches few insiders. Details: [`evaluation/CERT_SESSIONS.md`](evaluation/CERT_SESSIONS.md), the one-decision-per-day version [`evaluation/CERT_R42.md`](evaluation/CERT_R42.md), and the analysis in [`docs/research_safe_deception.md`](docs/research_safe_deception.md#33-cert-insider-threat-r42-public-benchmark).
 
 **Other findings.**
 - On **WUSTL-EHMS-2020** (a public healthcare network testbed), XGBoost reaches F1 1.00 only because of identifier columns (addresses, ports, MACs). Without them F1 is 0.71. [`evaluation/WUSTL_EHMS.md`](evaluation/WUSTL_EHMS.md)
-- Attacks hidden in the calibration set make the gate more conservative, never less. Under behaviour drift the bound can be exceeded (2.9 % at α = 1 %), and recalibrating on the last 7 days restores it. [`evaluation/DECEPTION.md`](evaluation/DECEPTION.md)
+- Calibrating on single events instead of whole sessions fails: on the simulator it deceives 61 % of legitimate sessions at α = 1 %, against 1.2 % for the session-level gate. Under behaviour drift the bound can be exceeded (2.9 % at α = 1 %), and recalibrating on the last 7 days restores it. [`evaluation/DECEPTION.md`](evaluation/DECEPTION.md)
+- An attacker who knows the thresholds must slow loud attacks (brute force, DDoS, fast exfiltration) to near-normal behaviour to avoid deception, while already-slow attacks evade cheaply. Per-role thresholds can be exploited by an attacker who controls an account of the most permissive role. [`evaluation/ADAPTIVE.md`](evaluation/ADAPTIVE.md)
 
 ---
 
@@ -155,6 +155,8 @@ GitHub Actions trains the models and runs the full suite on every push.
 | WUSTL-EHMS-2020 | `bash scripts/fetch_datasets.sh wustl && python3 ml/datasets/wustl_ehms.py` | `evaluation/WUSTL_EHMS.md` |
 | CERT r4.2 | `bash scripts/fetch_datasets.sh cert && python3 ml/datasets/cert_r42.py all` | `evaluation/CERT_R42.md` |
 | CERT r4.2 feature ablation | `python3 ml/datasets/cert_r42.py experiment --ablation scenario_web` | `evaluation/CERT_R42_NO_SCENARIO_WEB.md` |
+| CERT r4.2 event-level sessions | `python3 ml/datasets/cert_sessions.py` (after `cert_r42.py all`) | `evaluation/CERT_SESSIONS.md` |
+| Adaptive attacker (synthetic) | `python3 ml/experiments/adaptive_attacker.py` | `evaluation/ADAPTIVE.md` |
 
 Public datasets are not redistributed; the fetch script downloads them from their original sources. CERT r4.2 is a 4.8 GB download; the archive can be deleted after extraction.
 
@@ -183,7 +185,7 @@ SentiHealth/
 ├── config/         thresholds, policies, roster (secrets are created at first run)
 ├── models/         model manifest and decision policy (trained models are not committed)
 ├── deploy/         Dockerfiles
-└── docs/           research note; archive/ holds the first version's design documents
+└── docs/           research note, theory (proofs), related work; archive/ holds the first version's design documents
 ```
 
 ---

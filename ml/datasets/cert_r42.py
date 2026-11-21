@@ -303,6 +303,21 @@ def experiment(seeds: int = 5, ablation: str | None = None) -> None:
     print(f"user-days {len(F):,}; train {tr.sum():,} ({y[tr].sum()} malicious); post {(~tr).sum():,} ({y[~tr].sum()} malicious); "
           f"groups {F.loc[~tr, 'group'].nunique()}")
 
+    from safe_deception import clopper_pearson, group_excess
+
+    def gate_result(sc, cal_mask, te_mask, a, mode):
+        gate = DeceptionGate(alpha_noise=a, alpha_full=a / 5).fit(
+            sc[cal_mask], F.loc[cal_mask, "group"].to_numpy() if mode == "mondrian" else None)
+        gg = F.loc[te_mask, "group"].to_numpy()
+        tn = np.array([gate.thresholds(g)[0] for g in gg]) if mode == "mondrian" else np.full(len(gg), gate.tau_noise)
+        dec, yy = sc[te_mask] > tn, y[te_mask]
+        ex = group_excess(dec[~yy], gg[~yy], a, min_n=200)
+        return {"legit_n": int((~yy).sum()), "legit_deceived_count": int(dec[~yy].sum()),
+                "malicious_deceived": float(dec[yy].mean()) if yy.any() else None,
+                "per_group_legit": {r["group"]: r["rate"] for r in ex["groups"]},
+                "n_groups": ex["n_groups"], "n_significant": ex["n_significant"]}
+
+    mid = F.loc[~tr, "day"].quantile(0.5)
     runs = []
     for seed in range(seeds):
         xgb = XGBClassifier(n_estimators=400, learning_rate=0.05, max_depth=5, subsample=0.8, colsample_bytree=0.8,
@@ -313,32 +328,19 @@ def experiment(seeds: int = 5, ablation: str | None = None) -> None:
         S = {"xgb": xgb.predict_proba(X)[:, 1], "iforest": -iso.score_samples(X)}
         post = np.flatnonzero(~tr)
         rng = np.random.default_rng(seed)
-        cal_idx = rng.choice(post, size=len(post) // 2, replace=False)
         is_cal = np.zeros(len(F), bool)
-        is_cal[cal_idx] = True
-        te = ~tr & ~is_cal
+        is_cal[rng.choice(post, size=len(post) // 2, replace=False)] = True
+        # main protocol: time-ordered (earlier post-training days calibrate, later days evaluate);
+        # secondary: random split of the post-training days (the exchangeable setting)
+        protocols = {"temporal": (~tr & (F["day"] < mid).to_numpy(), ~tr & (F["day"] >= mid).to_numpy()),
+                     "random": (is_cal, ~tr & ~is_cal)}
         run = {"seed": seed}
         for det, sc in S.items():
-            blk = {"roc_auc": float(roc_auc_score(y[te], sc[te])), "pr_auc": float(average_precision_score(y[te], sc[te])), "gate": {}}
-            legit_cal = is_cal & ~y
-            for a in (0.10, 0.05, 0.01, 0.005):
-                for mode in ("pooled", "mondrian"):
-                    gate = DeceptionGate(alpha_noise=a, alpha_full=a / 5).fit(
-                        sc[legit_cal], F.loc[legit_cal, "group"].to_numpy() if mode == "mondrian" else None)
-                    tn = np.array([gate.thresholds(g)[0] if mode == "mondrian" else gate.tau_noise for g in F.loc[te, "group"]])
-                    dec = sc[te] > tn
-                    yy, gg = y[te], F.loc[te, "group"].to_numpy()
-                    per = {g: float(dec[(gg == g) & ~yy].mean()) for g in np.unique(gg) if ((gg == g) & ~yy).sum() >= 200}
-                    blk["gate"][f"{mode}_{a}"] = {"legit_deceived": float(dec[~yy].mean()), "malicious_deceived": float(dec[yy].mean()) if yy.any() else None,
-                                                   "per_group_legit": per}
-            # time-ordered: earlier post days calibrate, later evaluate
-            mid = F.loc[~tr, "day"].quantile(0.5)
-            cal_t = ~tr & (F["day"] < mid).to_numpy() & ~y
-            te_t = ~tr & (F["day"] >= mid).to_numpy()
-            g_t = DeceptionGate(alpha_noise=0.01, alpha_full=0.002).fit(sc[cal_t], F.loc[cal_t, "group"].to_numpy())
-            tn = np.array([g_t.thresholds(g)[0] for g in F.loc[te_t, "group"]])
-            dec = sc[te_t] > tn
-            blk["temporal_0.01"] = {"legit_deceived": float(dec[~y[te_t]].mean()), "malicious_deceived": float(dec[y[te_t]].mean()) if y[te_t].any() else None}
+            te_all = ~tr
+            blk = {"roc_auc": float(roc_auc_score(y[te_all], sc[te_all])), "pr_auc": float(average_precision_score(y[te_all], sc[te_all]))}
+            for proto, (cal_mask, te_mask) in protocols.items():
+                blk[proto] = {f"{mode}_{a}": gate_result(sc, cal_mask & ~y, te_mask, a, mode)
+                              for a in (0.10, 0.05, 0.01, 0.005) for mode in ("pooled", "mondrian")}
             run[det] = blk
         runs.append(run)
         print(f"seed {seed} done")
@@ -347,35 +349,42 @@ def experiment(seeds: int = 5, ablation: str | None = None) -> None:
     with open(os.path.join(OUT, f"cert_r42{suffix}.json"), "w") as f:
         json.dump({"generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "features": feats,
                    "dropped": dropped, "runs": runs}, f, indent=2)
-    md = ["# CERT Insider Threat r4.2: measured results" + (f" (without {', '.join(dropped)})" if dropped else ""), "",
+    pct = lambda x: "n/a" if x is None else f"{100 * x:.2f} %"
+    md = ["# CERT Insider Threat r4.2, one decision per user-day: measured results" + (f" (without {', '.join(dropped)})" if dropped else ""), "",
           f"Public synthetic benchmark (CMU SEI). {len(F):,} user-days ({int(y.sum())} malicious, {F.user.nunique()} users), "
-          f"{len(feats)} features. "
-          "Detectors trained on the first half of the period; later user-days split at random into calibration and evaluation; "
-          f"mean over {seeds} seeds. 'Legit deceived' = share of normal user-days put on deception.", "",
-          "| detector | ROC-AUC | PR-AUC |", "|---|---|---|"]
-    for det in ("xgb", "iforest"):
-        md.append(f"| {det} | {np.mean([r[det]['roc_auc'] for r in runs]):.3f} | {np.mean([r[det]['pr_auc'] for r in runs]):.3f} |")
-    for det in ("xgb", "iforest"):
-        md += ["", f"## Deception gate, detector {det}", "",
-               "| alpha | pooled: legit deceived | pooled: worst role | per-role: legit deceived | per-role: worst role | malicious days deceived (per-role) |",
-               "|---|---|---|---|---|---|"]
-        for a in (0.10, 0.05, 0.01, 0.005):
-            def worst(mode):
-                per = {}
-                for r in runs:
-                    for g, v in r[det]["gate"][f"{mode}_{a}"]["per_group_legit"].items():
-                        per.setdefault(g, []).append(v)
-                return max((np.mean(v) for v in per.values()), default=0.0)
-            pl = np.mean([r[det]["gate"][f"pooled_{a}"]["legit_deceived"] for r in runs])
-            ml = np.mean([r[det]["gate"][f"mondrian_{a}"]["legit_deceived"] for r in runs])
-            mm = np.mean([r[det]["gate"][f"mondrian_{a}"]["malicious_deceived"] or 0 for r in runs])
-            md.append(f"| {a} | {pl:.4f} | {worst('pooled'):.4f} | {ml:.4f} | {worst('mondrian'):.4f} | {mm:.3f} |")
-        tl = np.mean([r[det]["temporal_0.01"]["legit_deceived"] for r in runs])
-        tm = np.mean([r[det]["temporal_0.01"]["malicious_deceived"] or 0 for r in runs])
-        md.append(f"\nTime-ordered calibration, alpha 0.01, per-role: legit deceived {tl:.4f}, malicious days deceived {tm:.3f}.")
+          f"{len(feats)} features, {F.loc[~tr, 'group'].nunique()} role groups. Detectors trained on the first half of the period; mean over {seeds} seeds. "
+          "'Legit deceived' = share of normal user-days put on deception, pooled over seeds with a 95 % Clopper-Pearson interval; "
+          "'worst role' averages each role over seeds, then takes the maximum; 'roles above alpha' counts roles significantly above "
+          "alpha (one-sided binomial test, Holm-corrected, 5 %), summed over seeds. For many decisions per session see CERT_SESSIONS.md.", "",
+          "Detection on the post-training period: " + "; ".join(
+              f"{d} ROC-AUC {np.mean([r[d]['roc_auc'] for r in runs]):.3f}, PR-AUC {np.mean([r[d]['pr_auc'] for r in runs]):.3f}" for d in ("xgb", "iforest")) + "."]
+    for proto, title in (("temporal", "Main result: time-ordered calibration (earlier days calibrate, later days evaluate)"),
+                         ("random", "Random split of the post-training days")):
+        md += ["", f"## {title}"]
+        for det in ("xgb", "iforest"):
+            md += ["", f"**Detector: {det}**", "",
+                   "| alpha | per-role: legit deceived [95 % CI] | per-role: worst role | roles above alpha | shared: worst role | roles above alpha | malicious days deceived (per-role) |",
+                   "|---|---|---|---|---|---|---|"]
+            for a in (0.10, 0.05, 0.01, 0.005):
+                def agg(mode):
+                    bl = [r[det][proto][f"{mode}_{a}"] for r in runs]
+                    k, n = sum(b["legit_deceived_count"] for b in bl), sum(b["legit_n"] for b in bl)
+                    per: dict = {}
+                    for b in bl:
+                        for g, v in b["per_group_legit"].items():
+                            per.setdefault(g, []).append(v)
+                    worst = max((float(np.mean(v)) for v in per.values()), default=0.0)
+                    sig = f"{sum(b['n_significant'] for b in bl)} / {sum(b['n_groups'] for b in bl)}"
+                    mal = [b["malicious_deceived"] for b in bl if b["malicious_deceived"] is not None]
+                    return k / n, clopper_pearson(k, n), worst, sig, (float(np.mean(mal)) if mal else None)
+                rate, (lo, hi), worst, sig, mal = agg("mondrian")
+                _, _, sworst, ssig, _ = agg("pooled")
+                md.append(f"| {a} | {pct(rate)} [{pct(lo)}, {pct(hi)}] | {pct(worst)} | {sig} | {pct(sworst)} | {ssig} | {pct(mal)} |")
     with open(os.path.join(OUT, f"CERT_R42{suffix.upper()}.md"), "w") as f:
         f.write("\n".join(md) + "\n")
     print("\n".join(md))
+
+
 
 
 def main() -> None:

@@ -11,7 +11,8 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 for p in (_ROOT, os.path.join(_ROOT, "ml")):
     if p not in sys.path:
         sys.path.insert(0, p)
-from safe_deception import DeceptionGate, conformal_pvalue, conformal_threshold, monitor  # noqa: E402
+from safe_deception import (DeceptionGate, clopper_pearson, conformal_pvalue, conformal_threshold,  # noqa: E402
+                            group_excess, monitor, np_umbrella_threshold)
 
 
 def test_marginal_bound_holds_on_exchangeable_data():
@@ -70,13 +71,56 @@ def test_levels_and_persistence():
     assert g2.thresholds("x") == (tn, tf) and g2.alpha_full == 0.01
 
 
-def test_contamination_only_makes_it_more_conservative():
+def test_contamination_with_high_scores_is_conservative():
     rng = np.random.default_rng(3)
     legit = rng.normal(0, 1, 2000)
-    attacks = rng.normal(4, 1, 100)
     clean = conformal_threshold(legit, 0.01)
+    attacks = clean + rng.exponential(1.0, 100)          # every added score is >= the clean tau
     dirty = conformal_threshold(np.concatenate([legit, attacks]), 0.01)
     assert dirty >= clean
+
+
+def test_contamination_with_low_scores_can_lower_tau():
+    """Undetected attacks score low; mixed into the calibration set they lower tau, so contamination
+    is not conservative in general (the counter-example from the research note)."""
+    legit = np.arange(1.0, 100.0)                        # 99 points, alpha 0.1 -> tau = 90th smallest = 90
+    clean = conformal_threshold(legit, 0.1)
+    dirty = conformal_threshold(np.concatenate([legit, np.zeros(10)]), 0.1)
+    assert clean == 90.0 and dirty == 89.0
+
+
+def test_contamination_bound_of_proposition_3():
+    """docs/theory.md, Proposition 3(a): m arbitrary calibration values inflate the rate by at most a
+    factor 1 + m/(n+1). Worst case: the adversary adds values below every legitimate score."""
+    rng = np.random.default_rng(4)
+    n, m, alpha = 300, 30, 0.05
+    rates = [np.mean(rng.normal(0, 1, 2000) > conformal_threshold(np.concatenate([rng.normal(0, 1, n), np.full(m, -10.0)]), alpha))
+             for _ in range(600)]
+    bound = alpha * (1 + m / (n + 1))
+    assert np.mean(rates) <= bound + 0.003            # Monte-Carlo slack
+    assert np.mean(rates) > alpha                      # and the inflation is real, not hypothetical
+
+
+def test_np_umbrella_holds_with_high_probability():
+    rng = np.random.default_rng(5)
+    alpha, delta = 0.05, 0.05
+    viol = [np.mean(rng.normal(0, 1, 20000) > np_umbrella_threshold(rng.normal(0, 1, 500), alpha, delta)) > alpha
+            for _ in range(300)]
+    assert np.mean(viol) <= delta + 0.03                 # P(rate > alpha) <= delta, Monte-Carlo slack
+    cal = rng.normal(0, 1, 500)
+    assert np_umbrella_threshold(cal, alpha, delta) >= conformal_threshold(cal, alpha)
+    assert np_umbrella_threshold(cal[:20], 0.01) == float("inf")
+
+
+def test_clopper_pearson_and_group_excess():
+    lo, hi = clopper_pearson(10, 1000)
+    assert lo < 0.01 < hi and abs(lo - 0.0048) < 1e-3 and abs(hi - 0.0183) < 1e-3
+    rng = np.random.default_rng(6)
+    groups = np.repeat(["a", "b", "c"], 2000)
+    deceived = np.concatenate([rng.random(2000) < 0.01, rng.random(2000) < 0.01, rng.random(2000) < 0.05])
+    res = group_excess(deceived, groups, alpha=0.01)
+    flagged = {r["group"] for r in res["groups"] if r["p_holm"] < 0.05}
+    assert flagged == {"c"} and res["n_significant"] == 1 and res["worst"]["group"] == "c"
 
 
 def test_pvalue_and_monitor():

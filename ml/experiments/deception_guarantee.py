@@ -39,7 +39,8 @@ for p in (_ML, _ROOT):
         sys.path.insert(0, p)
 import simulate_events as sim  # noqa: E402
 from features import FEATURE_NAMES, build_feature_table  # noqa: E402
-from safe_deception import DeceptionGate, sessionize  # noqa: E402
+from safe_deception import (DeceptionGate, clopper_pearson, conformal_threshold, group_excess,  # noqa: E402
+                            np_umbrella_threshold, sessionize)
 
 ALPHAS = [0.10, 0.05, 0.02, 0.01, 0.005]
 NAIVE_THRESHOLDS = [0.5, 0.75, 0.9]
@@ -112,32 +113,84 @@ def session_table(F: pd.DataFrame, mask: np.ndarray, score: np.ndarray) -> pd.Da
     return d
 
 
+def session_summary(d: pd.DataFrame) -> pd.DataFrame:
+    """One row per session: whole-session maximum score, attack flag, group and attack family."""
+    fam = d["attack_family"].where(d["attack_family"] != "normal")
+    return (d.assign(fam=fam).groupby("sess")
+            .agg(m=("score", "max"), a=("is_attack", "max"), g=("group", "first"), f=("fam", "first"))
+            .assign(a=lambda x: x.a.astype(bool), f=lambda x: x.f.fillna("normal")))
+
+
+def excess(dec_legit: np.ndarray, groups: np.ndarray, alpha: float) -> dict:
+    """Per-role rates with 95 % intervals and the number of roles significantly above alpha (Holm)."""
+    r = group_excess(dec_legit, groups, alpha, min_n=20)
+    return {"per_group": {x["group"]: {k: x[k] for k in ("n", "deceived", "rate", "ci_low", "ci_high", "p_holm")} for x in r["groups"]},
+            "n_groups": r["n_groups"], "n_significant": r["n_significant"]}
+
+
 def evaluate_gate(gate: DeceptionGate, d: pd.DataFrame, use_groups: bool) -> dict:
     dec = gate.decide_sessions(d["sess"].to_numpy(), d["score"].to_numpy(), d["group"].to_numpy() if use_groups else None)
-    d = d.assign(level=dec["level"].to_numpy())
-    s = d.groupby("sess").agg(attack=("is_attack", "max"), group=("group", "first"),
-                              noise=("level", lambda x: bool((x != "none").any())),
-                              full=("level", lambda x: bool((x == "full").any())))
+    d = d.assign(noise=(dec["level"] != "none").to_numpy(), full=(dec["level"] == "full").to_numpy())
+    s = d.groupby("sess").agg(attack=("is_attack", "max"), group=("group", "first"), noise=("noise", "max"), full=("full", "max"))
+    s["attack"] = s["attack"].astype(bool)
     legit, att = s[~s.attack], s[s.attack]
     out = {
         "legit_sessions": int(len(legit)), "attack_sessions": int(len(att)),
         "legit_ever_noise": float(legit.noise.mean()) if len(legit) else None,
+        "legit_deceived_count": int(legit.noise.sum()),
         "legit_ever_full": float(legit.full.mean()) if len(legit) else None,
         "attack_deceived": float(att.noise.mean()) if len(att) else None,
         "attack_full_decoy": float(att.full.mean()) if len(att) else None,
         "per_group_legit_ever_noise": {g: float(v.noise.mean()) for g, v in legit.groupby("group") if len(v) >= 20},
+        "excess": excess(legit.noise.to_numpy(), legit.group.to_numpy(), gate.alpha_noise),
     }
     # share of the attacker's EHR reads / exported KB that happen after the session was put on decoys
     a = d[d.is_attack.astype(bool)]
     reads, kb = a["ehr_reads"].sum(), a["export_kb"].sum()
-    out["attacker_reads_decoyed"] = float(a.loc[a.level == "full", "ehr_reads"].sum() / reads) if reads else None
-    out["attacker_export_decoyed"] = float(a.loc[a.level == "full", "export_kb"].sum() / kb) if kb else None
-    out["attacker_reads_noised_or_decoyed"] = float(a.loc[a.level != "none", "ehr_reads"].sum() / reads) if reads else None
+    out["attacker_reads_decoyed"] = float(a.loc[a.full, "ehr_reads"].sum() / reads) if reads else None
+    out["attacker_export_decoyed"] = float(a.loc[a.full, "export_kb"].sum() / kb) if kb else None
+    out["attacker_reads_noised_or_decoyed"] = float(a.loc[a.noise, "ehr_reads"].sum() / reads) if reads else None
     # per family session detection
-    fam = d.groupby("sess").agg(f=("attack_family", lambda x: next((v for v in x if v != "normal"), "normal")),
-                                dec=("level", lambda x: bool((x != "none").any())))
-    out["per_family_deceived"] = {k: float(v.dec.mean()) for k, v in fam[fam.f != "normal"].groupby("f")}
+    fam = d.assign(fam=d["attack_family"].where(d["attack_family"] != "normal")).groupby("sess").agg(f=("fam", "first"), dec=("noise", "max"))
+    out["per_family_deceived"] = {k: float(v.dec.mean()) for k, v in fam.dropna(subset=["f"]).groupby("f")}
     return out
+
+
+# --------------------------------------------------------------------------- baselines
+def gate_from_thresholds(alpha: float, pooled_tau: float, group_taus: dict | None) -> DeceptionGate:
+    """A gate with given noise thresholds, so baselines go through the same decision rule (running
+    maximum, pooled threshold for unauthenticated traffic, never deceive an unseen staff role)."""
+    g = DeceptionGate(alpha_noise=alpha, alpha_full=alpha, tau_noise=pooled_tau, tau_full=pooled_tau)
+    g.group_tau = {k: {"noise": v, "full": v, "n": 0} for k, v in (group_taus or {}).items()}
+    return g
+
+
+def fast_eval(gate: DeceptionGate, ts: pd.DataFrame, use_groups: bool) -> dict:
+    """Session-level evaluation from whole-session maxima: a session is ever deceived iff its maximum
+    exceeds its threshold (the running maximum reaches the session maximum)."""
+    tau = ts["g"].map(lambda g: gate.thresholds(g if use_groups else None)[0]).to_numpy(float)
+    hit = ts["m"].to_numpy() > tau
+    legit, att = ~ts["a"].to_numpy(), ts["a"].to_numpy()
+    return {"legit_ever_noise": float(hit[legit].mean()), "legit_deceived_count": int(hit[legit].sum()),
+            "legit_sessions": int(legit.sum()), "attack_deceived": float(hit[att].mean()) if att.any() else None,
+            "excess": excess(hit[legit], ts["g"].to_numpy()[legit], gate.alpha_noise)}
+
+
+def baselines(cal_events: pd.DataFrame, legit_cal: pd.DataFrame, ts: pd.DataFrame, alpha: float) -> dict:
+    """Thresholding rules a reviewer would compare against, all evaluated on whole sessions."""
+    groups = legit_cal.groupby("g")["m"]
+    legit_events = cal_events[cal_events["sess"].isin(legit_cal.index)]
+    rules = {
+        # ConformalGuard-style: conformal on per-event scores, then applied at every event of a session
+        "per_event_conformal": gate_from_thresholds(alpha, conformal_threshold(legit_events["score"].to_numpy(), alpha), None),
+        # per-role empirical (1 - alpha) quantile of session maxima, no finite-sample correction
+        "per_role_quantile": gate_from_thresholds(alpha, float(np.quantile(legit_cal["m"], 1 - alpha)),
+                                                  {g: float(np.quantile(v, 1 - alpha)) for g, v in groups}),
+        # per-role Neyman-Pearson umbrella: P(rate > alpha) <= 0.05 over the calibration draw
+        "per_role_neyman_pearson": gate_from_thresholds(alpha, np_umbrella_threshold(legit_cal["m"].to_numpy(), alpha),
+                                                        {g: np_umbrella_threshold(v.to_numpy(), alpha) for g, v in groups}),
+    }
+    return {name: fast_eval(g, ts, use_groups=name != "per_event_conformal") for name, g in rules.items()}
 
 
 def naive_baseline(d: pd.DataFrame, thr: float) -> dict:
@@ -157,34 +210,44 @@ def run_seed(seed: int, days: int, users: int, contamination: list[float], drift
     xgb, iso = train_detectors(F, tr, seed)
     S = scores(F, xgb, iso)
     res = {"seed": seed, "rows": int(len(F)), "detectors": {}}
+    # main protocol: time-ordered (earlier post-training sessions calibrate, later ones evaluate), as a
+    # deployment would run; the random split is the exchangeable setting the theory assumes
+    protocols = {"temporal": (spt == "val", spt == "test"), "random": (va, te)}
     for det, sc in S.items():
-        cal = session_table(F, va, sc)
-        cs = cal.groupby("sess").agg(m=("score", "max"), a=("is_attack", "max"), g=("group", "first"))
-        legit_cal = cs[~cs.a]
-        test = session_table(F, te, sc)
-        block = {"n_cal_legit_sessions": int(len(legit_cal)), "pooled": {}, "mondrian": {}, "naive": [], "contaminated": {}}
-        for alpha in ALPHAS:
-            g_pool = DeceptionGate(alpha_noise=alpha, alpha_full=alpha / 5).fit(legit_cal.m.to_numpy())
-            g_mond = DeceptionGate(alpha_noise=alpha, alpha_full=alpha / 5).fit(legit_cal.m.to_numpy(), legit_cal.g.to_numpy())
-            block["pooled"][str(alpha)] = evaluate_gate(g_pool, test, use_groups=False)
-            block["mondrian"][str(alpha)] = evaluate_gate(g_mond, test, use_groups=True)
-        for thr in NAIVE_THRESHOLDS:
-            if det == "xgb":
-                block["naive"].append(naive_baseline(test, thr))
-        # contamination: unlabeled attack sessions mixed into the calibration set
-        att_cal = cs[cs.a]
-        rng = np.random.default_rng(seed)
-        for frac in contamination:
-            k = int(round(frac * len(legit_cal)))
-            extra = att_cal.m.to_numpy()[rng.choice(len(att_cal), size=min(k, len(att_cal)), replace=False)] if k and len(att_cal) else np.array([])
-            cal_m = np.concatenate([legit_cal.m.to_numpy(), extra])
-            g = DeceptionGate(alpha_noise=0.01, alpha_full=0.002).fit(cal_m)
-            block["contaminated"][str(frac)] = evaluate_gate(g, test, use_groups=False) | {"n_attack_sessions_added": int(len(extra))}
-        # time-ordered calibration (earlier half of the post period calibrates the later half)
-        cal_t = session_table(F, spt == "val", sc).groupby("sess").agg(m=("score", "max"), a=("is_attack", "max"), g=("group", "first"))
-        test_t = session_table(F, spt == "test", sc)
-        g_t = DeceptionGate(alpha_noise=0.01, alpha_full=0.002).fit(cal_t[~cal_t.a].m.to_numpy(), cal_t[~cal_t.a].g.to_numpy())
-        block["temporal_alpha_0.01"] = evaluate_gate(g_t, test_t, use_groups=True)
+        block = {}
+        for proto, (cmask, tmask) in protocols.items():
+            cal = session_table(F, cmask, sc)
+            cs = session_summary(cal)
+            legit_cal = cs[~cs.a]
+            test = session_table(F, tmask, sc)
+            ts = session_summary(test)
+            pb = {"n_cal_legit_sessions": int(len(legit_cal)), "pooled": {}, "mondrian": {}, "baselines": {}, "naive": []}
+            for alpha in ALPHAS:
+                g_pool = DeceptionGate(alpha_noise=alpha, alpha_full=alpha / 5).fit(legit_cal.m.to_numpy())
+                g_mond = DeceptionGate(alpha_noise=alpha, alpha_full=alpha / 5).fit(legit_cal.m.to_numpy(), legit_cal.g.to_numpy())
+                pb["pooled"][str(alpha)] = evaluate_gate(g_pool, test, use_groups=False)
+                pb["mondrian"][str(alpha)] = evaluate_gate(g_mond, test, use_groups=True)
+                if proto == "temporal":
+                    pb["baselines"][str(alpha)] = baselines(cal, legit_cal, ts, alpha)
+            if proto == "temporal":
+                if det == "xgb":
+                    pb["naive"] = [naive_baseline(test, thr) for thr in NAIVE_THRESHOLDS]
+                # contamination: attack sessions mislabelled as legitimate in the calibration set.
+                # 'random' draws any attack session (mostly high-scoring, i.e. detected ones);
+                # 'stealthiest' takes the lowest-scoring ones, the attacks most likely to go unnoticed.
+                att_cal = cs[cs.a].sort_values("m")
+                rng = np.random.default_rng(seed)
+                pb["contaminated"] = {}
+                for mode in ("random", "stealthiest"):
+                    for frac in contamination:
+                        k = min(int(round(frac * len(legit_cal))), len(att_cal))
+                        if mode == "random":
+                            extra = att_cal.m.to_numpy()[rng.choice(len(att_cal), size=k, replace=False)] if k else np.array([])
+                        else:
+                            extra = att_cal.m.to_numpy()[:k]
+                        g = DeceptionGate(alpha_noise=0.01, alpha_full=0.002).fit(np.concatenate([legit_cal.m.to_numpy(), extra]))
+                        pb["contaminated"][f"{mode}_{frac}"] = fast_eval(g, ts, use_groups=False) | {"n_attack_sessions_added": int(k)}
+            block[proto] = pb
         res["detectors"][det] = block
 
     # drift: legitimate behaviour changes after deployment (read rates x drift); same detectors
@@ -210,36 +273,55 @@ def run_seed(seed: int, days: int, users: int, contamination: list[float], drift
 
 
 # --------------------------------------------------------------------------- report
+def _pct(x) -> str:
+    return "n/a" if x is None else f"{100 * x:.2f} %"
+
+
+def _pooled_rate(blocks: list[dict]) -> tuple[float, float, float]:
+    """Legitimate sessions deceived, pooled over seeds, with a 95 % Clopper-Pearson interval."""
+    k = sum(b["legit_deceived_count"] for b in blocks)
+    n = sum(b["legit_sessions"] for b in blocks)
+    lo, hi = clopper_pearson(k, n)
+    return k / n, lo, hi
+
+
+def _worst_role(blocks: list[dict]) -> float:
+    """Average each role's rate over seeds first, then take the worst role (a max over noisy
+    single-seed rates would be biased upwards)."""
+    per: dict = {}
+    for b in blocks:
+        for g, v in b["excess"]["per_group"].items():
+            per.setdefault(g, []).append(v["rate"])
+    return max((float(np.mean(v)) for v in per.values()), default=0.0)
+
+
+def _significant(blocks: list[dict]) -> str:
+    return f"{sum(b['excess']['n_significant'] for b in blocks)} / {sum(b['excess']['n_groups'] for b in blocks)}"
+
+
+def _mean(blocks: list[dict], key: str):
+    v = [b[key] for b in blocks if b.get(key) is not None]
+    return float(np.mean(v)) if v else None
+
+
 def summarise(runs: list[dict]) -> dict:
     out: dict = {}
     for det in runs[0]["detectors"]:
-        rows = []
-        for alpha in ALPHAS:
-            a = str(alpha)
-            def vals(kind, key):
-                v = [r["detectors"][det][kind][a][key] for r in runs if r["detectors"][det][kind][a][key] is not None]
-                return (float(np.mean(v)), float(np.max(v))) if v else (None, None)
-            def worst_group_mean(kind):
-                # average each role's rate over seeds first, then take the worst role (a max over noisy
-                # single-seed rates would be biased upwards)
-                per = {}
-                for r in runs:
-                    for g, v in r["detectors"][det][kind][a]["per_group_legit_ever_noise"].items():
-                        per.setdefault(g, []).append(v)
-                return max((np.mean(v) for v in per.values()), default=0.0)
-            worst_role = [worst_group_mean("mondrian")]
-            worst_role_pooled = [worst_group_mean("pooled")]
-            rows.append({
-                "alpha": alpha,
-                "pooled_legit_rate_mean_max": vals("pooled", "legit_ever_noise"),
-                "pooled_worst_role_mean": float(np.mean(worst_role_pooled)),
-                "mondrian_legit_rate_mean_max": vals("mondrian", "legit_ever_noise"),
-                "mondrian_worst_role_mean": float(np.mean(worst_role)),
-                "attack_sessions_deceived_mean": vals("mondrian", "attack_deceived")[0],
-                "attacker_reads_decoyed_mean": vals("mondrian", "attacker_reads_decoyed")[0],
-                "attacker_export_decoyed_mean": vals("mondrian", "attacker_export_decoyed")[0],
-            })
-        out[det] = rows
+        out[det] = {}
+        for proto in ("temporal", "random"):
+            rows = []
+            for alpha in ALPHAS:
+                a = str(alpha)
+                mond = [r["detectors"][det][proto]["mondrian"][a] for r in runs]
+                pool = [r["detectors"][det][proto]["pooled"][a] for r in runs]
+                rate, lo, hi = _pooled_rate(mond)
+                rows.append({"alpha": alpha, "per_role_rate": rate, "per_role_ci": [lo, hi],
+                             "per_role_worst_role": _worst_role(mond), "per_role_significant_roles": _significant(mond),
+                             "shared_rate": _pooled_rate(pool)[0], "shared_worst_role": _worst_role(pool),
+                             "shared_significant_roles": _significant(pool),
+                             "attack_sessions_deceived": _mean(mond, "attack_deceived"),
+                             "attacker_reads_decoyed": _mean(mond, "attacker_reads_decoyed")})
+            out[det][proto] = rows
     return out
 
 
@@ -248,53 +330,78 @@ def write_report(runs: list[dict], summary: dict, args) -> None:
     with open(os.path.join(OUT_DIR, "deception_guarantee.json"), "w") as f:
         json.dump({"generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "args": vars(args),
                    "summary": summary, "runs": runs}, f, indent=2, default=float)
-    fmt = lambda x: "n/a" if x is None else f"{x:.4f}"
     md = ["# Deception with a safety guarantee: measured results", "",
           f"Generated {datetime.now(timezone.utc).isoformat(timespec='seconds')}. **Synthetic data** (ml/simulate_events.py), "
-          f"{len(runs)} seeds, {args.days} days, {args.users} users per seed. Calibration on the validation period's legitimate sessions, "
-          "evaluation on the test period. 'Legit rate' = share of legitimate sessions that were EVER served noise or decoys.", ""]
-    for det, rows in summary.items():
-        md += [f"## Detector: {det}", "",
-               "| alpha | legit rate pooled (mean / max over seeds) | worst role, pooled | legit rate per-role gate (mean / max) | worst role, per-role gate | attack sessions deceived | attacker reads on decoys | attacker export on decoys |",
-               "|---|---|---|---|---|---|---|---|"]
-        for r in rows:
-            pm, px = r["pooled_legit_rate_mean_max"]
-            mm, mx = r["mondrian_legit_rate_mean_max"]
-            md.append(f"| {r['alpha']} | {fmt(pm)} / {fmt(px)} | {fmt(r['pooled_worst_role_mean'])} | {fmt(mm)} / {fmt(mx)} | {fmt(r['mondrian_worst_role_mean'])} | "
-                      f"{fmt(r['attack_sessions_deceived_mean'])} | {fmt(r['attacker_reads_decoyed_mean'])} | {fmt(r['attacker_export_decoyed_mean'])} |")
-        md.append("")
-    nv = [n for r in runs for n in r["detectors"]["xgb"]["naive"]]
+          f"{len(runs)} seeds, {args.days} days, {args.users} users per seed. A session is ever deceived if the gate put it on noise or "
+          "decoys at any event. Rates are pooled over seeds with a 95 % Clopper-Pearson interval; 'worst role' averages each role's "
+          "rate over seeds, then takes the maximum; 'roles above alpha' counts roles whose rate is significantly above alpha "
+          "(one-sided binomial test, Holm-corrected over roles, 5 %), summed over seeds.", "",
+          "## Main result: time-ordered calibration", "",
+          "Detectors are trained on the first half of the period. Within the rest, earlier sessions calibrate the gate and later "
+          "sessions evaluate it, as a deployment would.", ""]
+    head = ("| alpha | per-role gate: legit deceived [95 % CI] | worst role | roles above alpha | shared threshold: worst role | "
+            "roles above alpha | attack sessions deceived | attacker reads on decoys |")
+    for proto, title in (("temporal", None), ("random", "## Random split (exchangeable setting assumed by the theory)")):
+        if title:
+            md += [title, ""]
+        for det, by_proto in summary.items():
+            md += [f"**Detector: {det}**", "", head, "|---|---|---|---|---|---|---|---|"]
+            for r in by_proto[proto]:
+                lo, hi = r["per_role_ci"]
+                md.append(f"| {r['alpha']} | {_pct(r['per_role_rate'])} [{_pct(lo)}, {_pct(hi)}] | {_pct(r['per_role_worst_role'])} | "
+                          f"{r['per_role_significant_roles']} | {_pct(r['shared_worst_role'])} | {r['shared_significant_roles']} | "
+                          f"{_pct(r['attack_sessions_deceived'])} | {_pct(r['attacker_reads_decoyed'])} |")
+            md.append("")
+    md += ["## Baselines (time-ordered calibration)", "",
+           "All rules use the same running-maximum decision; only the threshold differs. *Per-event conformal* calibrates on "
+           "individual event scores (as conformal false-positive control for alert gating does) instead of whole-session maxima. "
+           "*Per-role quantile* uses each role's empirical (1 - alpha) quantile without the finite-sample correction. "
+           "*Per-role Neyman-Pearson* (umbrella algorithm, delta = 0.05) bounds the rate with probability 0.95 over the calibration draw.", "",
+           "| detector | alpha | rule | legit deceived | worst role | roles above alpha | attack sessions deceived |", "|---|---|---|---|---|---|---|"]
+    for det in summary:
+        for alpha in ALPHAS:
+            a = str(alpha)
+            rules = {"shared conformal": [r["detectors"][det]["temporal"]["pooled"][a] for r in runs],
+                     "**per-role conformal (ours)**": [r["detectors"][det]["temporal"]["mondrian"][a] for r in runs]}
+            for name in ("per_event_conformal", "per_role_quantile", "per_role_neyman_pearson"):
+                rules[name.replace("_", " ")] = [r["detectors"][det]["temporal"]["baselines"][a][name] for r in runs]
+            for name, bl in rules.items():
+                md.append(f"| {det} | {alpha} | {name} | {_pct(_pooled_rate(bl)[0])} | {_pct(_worst_role(bl))} | {_significant(bl)} | "
+                          f"{_pct(_mean(bl, 'attack_deceived'))} |")
+    md.append("")
+    nv = [n for r in runs for n in r["detectors"]["xgb"]["temporal"]["naive"]]
     if nv:
-        md += ["## Baseline: fixed threshold on the detector's probability (no guarantee)", "",
-               "| threshold | legit rate (mean over seeds) | worst role (mean) | attack sessions deceived |", "|---|---|---|---|"]
+        md += ["## Fixed threshold on the detector's probability (no guarantee)", "",
+               "| threshold | legit deceived | worst role | attack sessions deceived |", "|---|---|---|---|"]
         for thr in NAIVE_THRESHOLDS:
             sel = [n for n in nv if n["threshold"] == thr]
-            md.append(f"| {thr} | {fmt(np.mean([s['legit_ever_deceived'] for s in sel]))} | {fmt(np.mean([s['worst_group_legit'] or 0 for s in sel]))} | {fmt(np.mean([s['attack_deceived'] for s in sel]))} |")
+            md.append(f"| {thr} | {_pct(np.mean([s['legit_ever_deceived'] for s in sel]))} | {_pct(np.mean([s['worst_group_legit'] or 0 for s in sel]))} | "
+                      f"{_pct(np.mean([s['attack_deceived'] for s in sel]))} |")
         md.append("")
-    md += ["## Time-ordered calibration (alpha = 0.01, per-role gate)", "",
-           "Earlier half of the post-training sessions calibrates, later half is evaluated (not exchangeable if the halves differ).", "",
-           "| detector | legit rate (mean / max over seeds) | attack sessions deceived (mean) |", "|---|---|---|"]
-    for det in runs[0]["detectors"]:
-        sel = [r["detectors"][det]["temporal_alpha_0.01"] for r in runs]
-        md.append(f"| {det} | {fmt(np.mean([s['legit_ever_noise'] for s in sel]))} / {fmt(np.max([s['legit_ever_noise'] for s in sel]))} | {fmt(np.mean([s['attack_deceived'] for s in sel]))} |")
-    md.append("")
-    md += ["## Contaminated calibration (alpha = 0.01, xgb)", "", "| attack sessions added (as share of legit) | legit rate (mean) | attack sessions deceived (mean) |", "|---|---|---|"]
-    for frac in args.contamination:
-        sel = [r["detectors"]["xgb"]["contaminated"][str(frac)] for r in runs]
-        md.append(f"| {frac} | {fmt(np.mean([s['legit_ever_noise'] for s in sel]))} | {fmt(np.mean([s['attack_deceived'] for s in sel]))} |")
+    md += ["## Contaminated calibration (alpha = 0.01, shared threshold, time-ordered)", "",
+           "Attack sessions mislabelled as legitimate, as a share of the legitimate calibration sessions. *Random*: any attack "
+           "session (mostly detected, high-scoring ones). *Stealthiest*: the lowest-scoring attack sessions, the ones most likely "
+           "to go unnoticed and be mislabelled in practice.", "",
+           "| detector | contamination | share added | legit deceived [95 % CI] | attack sessions deceived |", "|---|---|---|---|---|"]
+    for det in summary:
+        for mode in ("random", "stealthiest"):
+            for frac in args.contamination:
+                bl = [r["detectors"][det]["temporal"]["contaminated"][f"{mode}_{frac}"] for r in runs]
+                rate, lo, hi = _pooled_rate(bl)
+                md.append(f"| {det} | {mode} | {frac} | {_pct(rate)} [{_pct(lo)}, {_pct(hi)}] | {_pct(_mean(bl, 'attack_deceived'))} |")
     if "drift" in runs[0]:
         md += ["", f"## Drift: legitimate read rates x{args.drift} after deployment (alpha = 0.01)", "",
-               "| detector | stale calibration: legit rate | recalibrated on 7 recent days: legit rate | attack deceived (stale / recalibrated) |", "|---|---|---|---|"]
+               "| detector | stale calibration: legit deceived | recalibrated on 7 recent days | attack deceived (stale / recalibrated) |", "|---|---|---|---|"]
         for det in runs[0]["drift"]:
             if det == "factor":
                 continue
             st = [r["drift"][det]["stale_calibration"] for r in runs]
             rc = [r["drift"][det]["recalibrated_on_recent_window"] for r in runs]
-            md.append(f"| {det} | {fmt(np.mean([s['legit_ever_noise'] for s in st]))} | {fmt(np.mean([s['legit_ever_noise'] for s in rc]))} | "
-                      f"{fmt(np.mean([s['attack_deceived'] for s in st]))} / {fmt(np.mean([s['attack_deceived'] for s in rc]))} |")
-    md += ["", "## Reading the table", "",
+            md.append(f"| {det} | {_pct(_pooled_rate(st)[0])} | {_pct(_pooled_rate(rc)[0])} | {_pct(_mean(st, 'attack_deceived'))} / {_pct(_mean(rc, 'attack_deceived'))} |")
+    md += ["", "## Reading the tables", "",
            "- The guarantee is P(legitimate session ever deceived) <= alpha under exchangeability; the per-role gate makes it hold inside each role.",
-           "- 'max over seeds' can exceed alpha by sampling noise because each seed has a finite number of test sessions.",
+           "- The worst role is the maximum over several noisy estimates, so it can sit above alpha by chance; 'roles above alpha' tests whether any role is significantly above it.",
+           "- Contamination is conservative only when the mislabelled sessions score above the clean threshold; low-scoring (stealthy) attacks can lower it.",
            "- All numbers are on simulated data written by the same author as the detector; they test the method's mechanics, not real-world performance."]
     with open(os.path.join(OUT_DIR, "DECEPTION.md"), "w") as f:
         f.write("\n".join(md) + "\n")

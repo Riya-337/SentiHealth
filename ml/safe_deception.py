@@ -24,11 +24,14 @@ Method (split conformal prediction, applied at session level)
   repeated per-event decisions do not inflate it.
 * Mondrian (group-conditional) version: one tau per group (e.g. role), calibrated on that group's
   sessions only; the bound then holds inside every group separately, so false deceptions cannot be
-  concentrated on one role. Groups with too few calibration sessions fall back to the pooled tau
-  only if that is not more permissive; otherwise deception is disabled for the group (fail-safe).
-* Contamination: if some calibration "legitimate" sessions are in fact undetected attacks, their
-  maxima are typically larger, which can only raise tau. The bound is then conservative (fewer
-  deceptions), never anti-conservative. evaluate this empirically rather than assume it.
+  concentrated on one role. A group with too few calibration sessions for alpha gets tau = +inf
+  (deception disabled for it); an unseen staff group is also never deceived (fail-safe).
+* Contamination: some calibration "legitimate" sessions may in fact be attacks. Adding scores that
+  are >= the clean tau cannot lower tau (the clean set's k-1 smallest scores stay the k-1 smallest),
+  so detected-but-unlabelled attacks only make the gate more conservative. Adding scores BELOW the
+  clean tau can lower it: the attacks most likely to be mislabelled as legitimate are the
+  undetected ones, which score low, so contamination is NOT conservative in general.
+  ml/experiments/deception_guarantee.py measures both cases (random and stealthiest attacks).
 * Two levels: noise-only above tau(alpha_noise), full decoys above tau(alpha_full) with
   alpha_full <= alpha_noise. Each level has its own bound.
 
@@ -58,6 +61,62 @@ def conformal_threshold(cal_scores: np.ndarray, alpha: float) -> float:
     if n == 0 or k > n:
         return float("inf")
     return float(s[k - 1])
+
+
+def np_umbrella_threshold(cal_scores: np.ndarray, alpha: float, delta: float = 0.05) -> float:
+    """Neyman-Pearson umbrella threshold (Tong, Feng & Li 2018), a baseline with a high-probability
+    guarantee: P_cal( P(new > tau) > alpha ) <= delta. tau is the k-th smallest calibration score,
+    with k the smallest order for which P(Binomial(n, 1 - alpha) >= k) <= delta; +inf if none exists.
+    Stricter than the conformal threshold, whose guarantee is only in expectation over calibration."""
+    from scipy.stats import binom
+    s = np.sort(np.asarray(cal_scores, dtype=float))
+    n = len(s)
+    if n == 0:
+        return float("inf")
+    k = np.arange(1, n + 1)
+    viol = binom.sf(k - 1, n, 1 - alpha)          # P(Binomial(n, 1-alpha) >= k)
+    ok = np.flatnonzero(viol <= delta)
+    return float(s[ok[0]]) if len(ok) else float("inf")
+
+
+def clopper_pearson(k: int, n: int, conf: float = 0.95) -> tuple[float, float]:
+    """Exact two-sided confidence interval for a binomial rate k/n."""
+    from scipy.stats import beta
+    if n == 0:
+        return 0.0, 1.0
+    a = 1 - conf
+    lo = 0.0 if k == 0 else float(beta.ppf(a / 2, k, n - k + 1))
+    hi = 1.0 if k == n else float(beta.ppf(1 - a / 2, k + 1, n - k))
+    return lo, hi
+
+
+def group_excess(deceived: np.ndarray, groups: np.ndarray, alpha: float, min_n: int = 1, level: float = 0.05) -> dict:
+    """Per-group realised false-deception rates on legitimate sessions, each with a 95 % Clopper-Pearson
+    interval and a one-sided binomial p-value for H0: rate <= alpha. Holm's correction across groups
+    answers whether ANY group is significantly above alpha, as opposed to the largest of many noisy
+    estimates landing above it by chance."""
+    from scipy.stats import binom
+    x = np.asarray(deceived, dtype=bool)
+    g = np.asarray(groups).astype(str)
+    rows = []
+    for grp in np.unique(g):
+        m = g == grp
+        n, k = int(m.sum()), int(x[m].sum())
+        if n < min_n:
+            continue
+        lo, hi = clopper_pearson(k, n)
+        rows.append({"group": grp, "n": n, "deceived": k, "rate": k / n, "ci_low": lo, "ci_high": hi,
+                     "p_value": float(binom.sf(k - 1, n, alpha)) if k else 1.0})
+    # Holm step-down over the per-group p-values
+    order = sorted(range(len(rows)), key=lambda i: rows[i]["p_value"])
+    running = 0.0
+    for rank, i in enumerate(order):
+        running = max(running, min(1.0, (len(rows) - rank) * rows[i]["p_value"]))
+        rows[i]["p_holm"] = running
+    worst = max(rows, key=lambda r: r["rate"]) if rows else None
+    return {"alpha": alpha, "groups": rows, "n_groups": len(rows),
+            "n_significant": sum(r["p_holm"] < level for r in rows),
+            "worst": worst}
 
 
 def conformal_pvalue(cal_scores: np.ndarray, score: float) -> float:
