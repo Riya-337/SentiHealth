@@ -294,7 +294,7 @@ def generate_shap_chart(ip, features):
     _xlabel = (
         'SHAP Value  (positive = increases High-tier risk,  negative = decreases)'
         if is_real_shap else
-        'Normalised Feature Value  (proxy — run model_trainer.py to enable real SHAP)'
+        'Normalised Feature Value  (proxy — run ml/train.py to enable real SHAP)'
     )
     ax.set_xlabel(_xlabel, fontsize=9)
     ax.set_title(f'SHAP Feature Attribution  |  Source: {ip}', fontsize=11, fontweight='bold')

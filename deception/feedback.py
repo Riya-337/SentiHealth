@@ -10,7 +10,7 @@ How it works:
   2. flush_mirage_labels() is called periodically (on sentinel shutdown or
      after a configurable interval) and converts every 'full' deception
      session into a confirmed attack entry in retraining/retraining_queue.json.
-  3. The poisoning quarantine in review_queue.py / model_trainer.py checks
+  3. The poisoning quarantine in review_queue.py / ml/train.py checks
      these entries before training.
 
 The entries are marked human_confirmed=True because the ground truth is

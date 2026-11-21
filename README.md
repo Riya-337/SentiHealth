@@ -1,360 +1,200 @@
 # SentiHealth
 
-**Autonomous, zero-cloud healthcare cybersecurity — ML-driven threat detection with self-healing and human-in-the-loop authorization.**
+**Intrusion detection and response for hospital information systems, with a provable bound on how often legitimate staff are served decoy data.**
 
-![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python&logoColor=white)
-![Flask](https://img.shields.io/badge/Dashboard-Flask-lightgrey?logo=flask)
-![React](https://img.shields.io/badge/Frontend-React%20%2F%20Vite-61DAFB?logo=react&logoColor=black)
+[![ci](https://github.com/Riya-337/SentiHealth/actions/workflows/ci.yml/badge.svg)](https://github.com/Riya-337/SentiHealth/actions/workflows/ci.yml)
+![Python](https://img.shields.io/badge/Python-3.12%2B-blue?logo=python&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
-SentiHealth monitors a live hospital EHR web server, scores every network event using a 5-model ML ensemble in real time, and automatically executes tiered self-healing responses — from IP throttling to full database snapshots — with cryptographic audit logging and admin MFA approval for high-risk actions.
+SentiHealth watches activity on a hospital EHR (electronic health record) server, scores every user and IP with calibrated machine-learning models, and responds in proportion to the risk: logging, throttling, account locks, or blocking after an administrator approves with MFA. Every action goes into a tamper-evident audit log.
 
-> **RV College of Engineering — Experiential Learning Project 2024-25 · Team 57 · Theme: SDG**
+Its research contribution is **safety-bounded deception**. Serving fake patient records to an attacker is a strong defence, but serving them to a clinician by mistake can harm a patient. SentiHealth decides when to deceive with a per-role conformal gate that guarantees, for every staff role, that a legitimate session is deceived with probability at most α (for example 1 %).
 
----
-
-## Table of Contents
-
-1. [Problem and Goals](#problem-and-goals)
-2. [How It Works](#how-it-works)
-3. [ML Ensemble Details](#ml-ensemble-details)
-4. [Security Architecture](#security-architecture)
-5. [Repository Layout](#repository-layout)
-6. [Quickstart](#quickstart)
-7. [Technologies Used](#technologies-used)
-8. [Limitations and Future Work](#limitations-and-future-work)
+> Built by [Riya Aggarwal](https://github.com/Riya-337), RV College of Engineering, Bengaluru · Unisys Innovation Program 2026: Top 50 nationally.
 
 ---
 
-## Problem and Goals
+## Contents
 
-**Problem:** Hospitals are the #1 target for ransomware and data exfiltration. Existing ML-based security tools either depend on cloud infrastructure (violating HIPAA air-gap requirements) or require constant manual human review — making them too slow for millisecond-scale intrusions.
-
-**Goals:**
-- **Detect threats in real time** from live network event logs, with 100% zero-cloud on-premises operation.
-- **Automate tiered responses** (throttle, lockout, snapshot) proportional to threat severity.
-- **Keep humans in the loop** — High-tier threats require TOTP MFA-authenticated admin approval before action.
-- **Deliver zero-cloud alerting** — Real-time LAN desktop notifications via `local_notifier_client.py` consuming SSE (`/api/stream`).
-- **Leave a tamper-proof audit trail** — Write-ahead dual-replicated SHA-256 hash-chained ledger (`audit_chain.json` & `audit_chain_replica.json`).
-- **Continuously improve** via a human-in-the-loop retraining queue: confirmed attacks feed directly back into the ML pipeline.
+1. [Research: safety-bounded deception](#research-safety-bounded-deception)
+2. [How it works](#how-it-works)
+3. [Detection models](#detection-models)
+4. [Quickstart](#quickstart)
+5. [Reproducing the experiments](#reproducing-the-experiments)
+6. [Repository layout](#repository-layout)
+7. [Limitations](#limitations)
 
 ---
 
-## How It Works
+## Research: safety-bounded deception
 
-### Plain-Language Flow
+**Method.** A session is one user's or IP's activity without a gap longer than 30 minutes. The session is deceived from the first moment its running maximum risk score exceeds a threshold τ. τ is set by split conformal prediction on the whole-session maxima of known-legitimate sessions, separately for each staff role (Mondrian calibration). If future legitimate sessions resemble the calibration sessions, then for every role
 
-1. A **Node.js EHR server** generates live network event logs (`events.jsonl`) simulating hospital web traffic.
-2. **`core/live_sentinel.py`** tails the log stream in real time; `ml/features.py` turns each user/IP's recent history into windowed features (5-minute and 1-hour counts, deviation from the entity's own 24-hour baseline, shift and time context).
-3. The **detection models** score each event and assign a **Threat Tier** — Low, Medium, or High: a calibrated XGBoost for known attack patterns, an Isolation Forest for activity that is unusual for that user/IP, and a small, documented rule layer. The event's own `attack_type` label is never used for the decision.
-4. The **Self-Healing Responder** executes the appropriate automated action based on tier.
-5. **High-tier events** trigger immediate **SSE desktop alerts** (`local_notifier_client.py`) and dashboard challenges requiring TOTP MFA-verified admin approval before high-risk execution.
-6. Every action is appended to a **write-ahead dual-replicated audit ledger** — entries cannot be silently deleted or tampered with without triggering `HALTED_CORRUPTION`.
-7. Admins can flag misclassified events via a **review queue**, which feeds confirmed attacks back into the retraining pipeline to continuously improve model accuracy.
+```
+P(a legitimate session is ever deceived) ≤ α
+```
 
-### Architecture Diagram
+The bound covers the whole session, so the repeated per-event decisions do not add up. The full write-up, including the argument and what is *not* guaranteed, is in [`docs/research_safe_deception.md`](docs/research_safe_deception.md); the code is [`ml/safe_deception.py`](ml/safe_deception.py).
+
+**Result on a public benchmark.** CERT Insider Threat r4.2 (330,285 user-days, 1,000 users, 541 malicious days), α = 1 %, mean of 5 seeds:
+
+| Detector | Features | Worst role, shared threshold | Worst role, per-role gate | Malicious days deceived (per-role gate) |
+|---|---|---|---|---|
+| XGBoost | all | 4.38 % | 1.32 % | 95.7 % |
+| XGBoost | without scenario-specific web features | 3.93 % | 1.35 % | 94.9 % |
+| Isolation Forest | all | 21.89 % | 1.43 % | 14.8 % |
+
+A single shared threshold meets α on average but lets some roles carry several times their share of false deceptions; the per-role gate keeps every role near α, whichever detector it uses. The worst role sits slightly above 1 % because it is the maximum over 35 roles, each estimated from a finite number of days. Details: [`evaluation/CERT_R42.md`](evaluation/CERT_R42.md) and the [feature ablation](evaluation/CERT_R42_NO_SCENARIO_WEB.md).
+
+**Other findings.**
+- On **WUSTL-EHMS-2020** (a public healthcare network testbed), XGBoost reaches F1 1.00 only because of identifier columns (addresses, ports, MACs). Without them F1 is 0.71. [`evaluation/WUSTL_EHMS.md`](evaluation/WUSTL_EHMS.md)
+- Attacks hidden in the calibration set make the gate more conservative, never less. Under behaviour drift the bound can be exceeded (2.9 % at α = 1 %), and recalibrating on the last 7 days restores it. [`evaluation/DECEPTION.md`](evaluation/DECEPTION.md)
+
+---
+
+## How it works
 
 ```mermaid
 flowchart LR
-  subgraph source [EHR Server]
-    N[Node.js webapp] -->|events.jsonl| LOG[Live Log Stream]
+  subgraph ehr [EHR server]
+    W[Node.js web app] -->|signed raw events| L[events.jsonl]
   end
-
-  subgraph sentinel [Live Sentinel AI]
-    LOG --> FE[Feature Engineering\n8 features per event]
-    FE --> ENS[5-Model ML Ensemble\nRF · XGB · GBM · SVM · LR]
-    ENS --> TIER[Threat Tier\nLow / Medium / High]
+  subgraph sentinel [Live sentinel]
+    L --> F[Windowed features<br/>per user and IP]
+    F --> M[Calibrated XGBoost<br/>+ Isolation Forest<br/>+ rule layer]
+    M --> T[Tier: Low / Medium / High]
   end
-
-  subgraph response [Self-Healing Responder]
-    TIER -->|Low| AUTO1[Log & Monitor]
-    TIER -->|Medium| AUTO2[IP Throttle\nAccount Lockout]
-    TIER -->|High| APPR[Admin MFA Approval]
-    APPR -->|Approved| AUTO3[Database Snapshot\nFull Lockdown]
+  subgraph respond [Response]
+    T -->|Low| R1[Log]
+    T -->|Medium| R2[Throttle, lock account]
+    T -->|High| R3[Admin approval with MFA<br/>then block / snapshot]
+    M --> G[Conformal deception gate]
+    G --> D[Decoy records or noise]
   end
-
-  subgraph audit [Audit and Retraining]
-    AUTO1 & AUTO2 & AUTO3 --> CHAIN[SHA-256 Hash-Chained\nAudit Ledger]
-    CHAIN --> RQ[Review Queue]
-    RQ --> RETRAIN[Human-in-the-Loop\nModel Retraining]
-  end
+  R1 & R2 & R3 & D --> A[Hash-chained audit log]
+  A --> Q[Review queue] --> RT[Retraining]
 ```
 
-### The Four Layers
+| Component | Where |
+|---|---|
+| EHR web app (the system being protected) | `webapp/` |
+| Live sentinel: tails events, builds features, scores | `core/live_sentinel.py`, `ml/features.py`, `ml/scoring_matrix.py` |
+| Tiered response with dry-run mode and rollback | `core/self_healing_responder.py`, `core/response_adapters.py` |
+| Deception: decoy records, noise, conformal gate | `deception/`, `ml/safe_deception.py` |
+| Dashboard backend (Flask) and frontend (React, TypeScript) | `api/dashboard.py`, `frontend/` |
+| Security: MFA for every user, sessions, signed events, audit-chain anchoring | `security/`, `api/dashboard.py` |
+| Privacy: pseudonymised display, crypto-shredding | `privacy/` |
 
-| Layer | Component | What It Does |
-|-------|-----------|--------------|
-| **1 — Target** | Node.js EHR Server | Generates live network event logs simulating hospital web traffic |
-| **2 — Watchdog** | `core/live_sentinel.py` + `ml/features.py` | Tails logs, builds windowed per-entity features, feeds events to the models |
-| **3 — Brain** | `ml/scoring_matrix.py` | Calibrated XGBoost + Isolation Forest + rule layer; cost-based tier decision with a per-event explanation |
-| **4 — Responder** | `self_healing_responder.py` | Executes automated responses and manages admin approval for High-tier events |
+Security notes: every user enrols in TOTP MFA; sessions are stored hashed with an idle timeout; automatic account lockouts expire after 15 minutes; response actions run in dry-run mode by default (`SENTIHEALTH_DRY_RUN=1`). Configuration is through the environment variables listed in [`.env.example`](.env.example).
 
 ---
 
-## Detection Models
+## Detection models
 
-> All numbers in this section are measured on **synthetic data** (`ml/simulate_events.py`). They show that the pipeline works, not how it performs on a real hospital. See `evaluation/REPORT.md` for the full, regenerated report.
+No public dataset of hospital EHR access logs with labelled attacks exists, so `ml/simulate_events.py` generates minute-level activity for 120 users over 14 days, with ten attack families including stealthy ones (low-and-slow brute force, slow exfiltration, off-hours insider access). One family, `credential_stuffing`, is held out of training. Models are trained with a temporal split (70 % train, 15 % validation and calibration, 15 % test) on 29 windowed features per user and IP.
 
-### Data
+Test period (50,130 rows, 562 attacks), **synthetic data**:
 
-No public dataset of hospital EHR access logs with labelled attacks exists, so `ml/simulate_events.py` generates minute-level activity for 120 users over 14 days: normal behaviour driven by role and shift (including remote and on-call sessions), with ten attack families overlaid as campaigns. Labels come from the campaign, never from thresholds on the features. Stealthy variants are included on purpose: low-and-slow brute force (2–4 failures a minute for hours), slow exfiltration that stays under 500 KB/h, and off-hours insider access. One family (`credential_stuffing`) is held out of training to measure detection of an attack type the models never saw. The generator is deterministic; the dataset is 334,531 minute-records, 1.3 % of them attack traffic.
+| System | Macro F1 | High-tier recall | High-tier precision |
+|---|---|---|---|
+| XGBoost, calibrated (deployed) | 0.974 | 0.997 | 0.981 |
+| Random Forest, calibrated | 0.972 | 1.000 | 0.981 |
+| Earlier five-model ensemble | 0.958 | 0.994 | 0.983 |
+| Expert rules only | 0.556 | 0.997 | 0.616 |
 
-### Features (`ml/features.py`)
-
-Each record is scored with 29 features computed from that user/IP's own history: counts and ratios over the last **5 minutes** and **1 hour** (logins, failures, failure ratio, EHR reads, export KB, requests, distinct endpoints, internal hosts, CPU, memory), the entity's **24-hour baseline** and the current hour's deviation from it, and context (hour of day, weekend, off-shift score from the roster, IP reputation). The same code runs in batch for training and incrementally in the live sentinel; a test checks that the two agree. The eight legacy feature names (`failed_logins`, `cpu_usage`, …) are derived from these for the rule layer and the dashboard.
-
-### Models (`ml/train.py`, `ml/scoring_matrix.py`)
-
-| Component | Role |
-|-----------|------|
-| **XGBoost, isotonic-calibrated** | Supervised Low/Medium/High classifier; configuration chosen on the validation period, calibrated on it |
-| **Isolation Forest** (normal rows only) | Unsupervised path for attacks the classifier never saw; raises Low to Medium when a stream record is unusual for that entity |
-| **Cost policy** (`ml/cost_matrix.py`) | The tier with the lowest expected cost, instead of a plain argmax |
-| **Rule layer** (`ml/rules.py`) | The deployed failed-login thresholds, kept separate so they can be switched off (`SENTIHEALTH_RULES=0`) and evaluated alone |
-| **Context** (`core/context.py`) | On-shift + badge, emergency or registered proxy lower an uncertain tier by one; roster-but-external raises it |
-
-Training uses a **temporal split** (first 70 % of the period to train, next 15 % to select and calibrate, last 15 % to test). The previous five-model ensemble (RF, GB, SVM, LR, XGB) is still trained with `--legacy` so the ablation can be reproduced.
-
-### Measured results (test period, 50,130 rows, 562 of them attacks)
-
-| System | Macro F1 | High recall | High precision | False alarms on normal |
-|---|---|---|---|---|
-| XGBoost (calibrated) | 0.974 | 0.997 | 0.981 | 0.09 % |
-| Random Forest (single, calibrated) | 0.972 | 1.000 | 0.981 | — |
-| Legacy 5-model ensemble | 0.958 | 0.994 | 0.983 | — |
-| Expert rules only | 0.556 | 0.997 | 0.616 | 21 % |
-| Deployed rules only (failed logins) | 0.651 | 0.164 | 0.935 | — |
-
-Every attack campaign in the test period is detected (row-level detection ≥ 0.89 for all families except reconnaissance, which is Low-tier by definition). On the held-out family, XGBoost flags 36 % of rows but all campaigns; the Isolation Forest flags 100 % of rows at 2.5 % false alarms. A single calibrated model matches or beats the five-model ensemble at 25× lower latency, which is why the live path uses one model.
-
-### Safeguards
-
-- **No label leak** — the event's `attack_type` field is metadata only; `tests/test_ml_pipeline.py` checks it cannot move the tier.
-- **Deterministic scoring** — the same input always gives the same score; nothing is randomised.
-- **Poisoning check on retraining** — `core/review_queue.py` flags approvals that would shift the approved-per-tier distribution suspiciously.
-- **SHA-256 model manifest** — each saved model file is checksummed; a swapped model file stops the sentinel on load.
-
----
-
-## Security Architecture
-
-```
-[Node.js EHR] → [events.jsonl] → [live_sentinel.py]
-    → [Feature Engineering (8 features)]
-    → [ML Ensemble: RF + XGB + GBM + SVM + LR]
-    → [Threat Tier: Low / Medium / High]
-    → [Self-Healing Responder]
-        ├── Low:    Log & continue
-        ├── Medium: IP throttle + account lockout
-        └── High:   MFA-gated admin approval → DB snapshot + lockdown
-    → [SHA-256 Hash-Chained Audit Ledger]
-    → [Review Queue → Human-in-the-Loop Retraining]
-```
-
-**Cryptographic Audit Ledger:** Every response action is appended as a hash-chained JSON entry. Each entry includes the SHA-256 hash of the previous entry, making silent log deletion or tampering cryptographically detectable — the same principle used in blockchain consensus.
-
-**SHAP Explainability:** Every High-tier alert includes a SHAP waterfall chart explaining *which features* drove the ensemble's decision, ensuring admins can make informed approval decisions rather than blindly trusting a black-box score.
-
-**Deception Layer:** `deception/` implements a Mirage honeypot that injects fake-but-convincing EHR data into attacker sessions, records flagged sessions for retraining, and applies noise to confuse reconnaissance tools — all without disrupting legitimate traffic.
-
-**Privacy Controls:** `privacy/` provides HIPAA-aligned pseudonymisation (`pseudonymize.py`) and cryptographic data shredding (`crypto_shred.py`) — patient identifiers can be irreversibly purged by destroying the encryption key alone.
-
----
-
-## Repository Layout
-
-```
-unisyshealth/
-├── webapp/                  # Node.js EHR server (attack target, port 3000)
-├── frontend/                # React/Vite/TypeScript admin dashboard UI
-├── deception/               # Mirage honeypot & deception layer
-├── notifications/           # Alert dispatch — Telegram, console, dual-notifier, SMTP
-├── privacy/                 # HIPAA-aligned pseudonymisation and crypto-shredding
-├── attack_scripts/          # Cyberattack simulators (exfiltration, brute-force, port scan)
-├── config/                  # Runtime config: thresholds, notifier, deception policy, TLS certs
-├── data/                    # Synthetic EHR dataset, audit chain, user DB
-├── models/                  # Serialized calibrated model files + SHA-256 manifest
-├── evaluation/              # Model evaluation scripts and metrics
-├── demos/                   # Standalone demo scripts (crypto-shred, pseudonymize, scenario)
-├── scripts/                 # Operational scripts + shell launchers
-│   ├── setup.sh             # One-time environment setup
-│   ├── reset_and_run.sh     # Pre-demo reset & pre-flight checklist
-│   ├── health_monitor.py    # System health daemon (runs as systemd service)
-│   ├── backup_db.py         # Manual DB backup utility
-│   └── ...                  # Emergency unblock, restore, TLS cert generation, etc.
-├── tests/                   # Pytest suite (sentinel, tiers, MFA, rate-limit, DB backup)
-├── docs/                    # All project documentation
-│   ├── AGENTS.md            # Agent onboarding instructions (read this first)
-│   ├── CONTRIBUTING.md      # Contributor guide
-│   ├── DISASTER_RECOVERY.md # Operational disaster-recovery runbook
-│   ├── FUTURE_WORK.md       # Known limitations and planned enhancements
-│   ├── MODEL_METRICS.md     # Ensemble performance metrics and evaluation methodology
-│   ├── DECISION_RECORD.md   # Architecture decision log
-│   ├── constitution.md      # Project constitution and design principles
-│   ├── trd.md               # Technical requirements document
-│   └── ...                  # Additional design and demo docs
-├── api/dashboard.py         # Real-time Flask dashboard backend (port 5001)
-├── core/                    # live_sentinel.py, self_healing_responder.py, review_queue.py,
-│                            # context.py, local_notifier_client.py
-├── ml/                      # model_trainer.py, scoring_matrix.py, data_generator.py
-├── security/                # database.py (SQLite / PostgreSQL), secrets_vault.py
-├── _paths.py                # Single source of truth for all filesystem paths
-├── requirements.txt
-└── LICENSE
-```
+These numbers show the pipeline works on data written by the same author as the features; they are not evidence of performance in a real hospital. Full report: [`evaluation/REPORT.md`](evaluation/REPORT.md).
 
 ---
 
 ## Quickstart
 
-### Prerequisites
-
-- Python 3.10+
-- Node.js 18+
-- *(Optional)* PostgreSQL — if omitted, SentiHealth auto-initializes a local SQLite DB at `data/app.db`
-
-### 1. Environment Setup
+### With Docker
 
 ```bash
-bash scripts/setup.sh
-source .venv/bin/activate
+docker compose up --build
 ```
 
-*(Optional — PostgreSQL only)*
-```bash
-export DATABASE_URL="postgresql://sentiuser:sentipass@localhost:5432/sentihealth_db"
-```
+Dashboard backend on `http://localhost:5001`, frontend on `http://localhost:4173`, EHR web app on `http://localhost:3000`.
 
-### 2. Train the ML Models
+### Locally
 
-Only needed on first run or after dataset changes:
+Python 3.12+ and Node.js 18+.
 
 ```bash
-python3 ml/model_trainer.py
+bash scripts/setup.sh && source .venv/bin/activate
+python3 ml/simulate_events.py && python3 ml/train.py   # about 2 minutes
+python3 api/dashboard.py                               # backend on :5001
 ```
 
-### 3. Start the System
+In other terminals:
 
-Open **6 separate terminal windows** and run in order:
-
-**Terminal 1 — Database & EHR Web App**
 ```bash
-source .venv/bin/activate
-python3 security/database.py   # Initialize schema and tables
-cd webapp && node app.js       # EHR web app on port 3000
+cd webapp && node app.js                    # EHR web app on :3000
+python3 core/live_sentinel.py               # scores events as they arrive
+cd frontend && npm install && npm run dev   # dashboard UI
 ```
 
-**Terminal 2 — Flask Dashboard Backend**
+On first start the dashboard opens a **setup page** that makes you choose an admin password and enrol MFA. Then run an attack simulation, for example `python3 attack_scripts/exfiltration.py`, and watch it being detected on the dashboard.
+
+### Tests
+
 ```bash
-source .venv/bin/activate
-python3 api/dashboard.py       # Admin dashboard on http://localhost:5001
-```
-> **First-time setup:** On first start the backend creates `data/users.json`, `config/.secrets_vault.json` and the admin account, and prints the admin's TOTP secret and 8 backup codes in this terminal. Log in with `admin` / `adminpass123`, change the password, add the TOTP secret to Google Authenticator or Authy, and save the backup codes. These files hold secrets and are git-ignored: never commit them.
-
-**Terminal 3 — Local Desktop Alert Client**
-```bash
-source .venv/bin/activate
-python3 core/local_notifier_client.py   # Receives High-tier alerts via SSE (/api/stream)
+python3 -m pytest -q
 ```
 
-**Terminal 4 — Live Sentinel AI Engine**
-```bash
-source .venv/bin/activate
-python3 core/live_sentinel.py  # Tails event logs, scores with 5-model ensemble
-```
-
-**Terminal 5 — React Frontend UI** *(optional)*
-```bash
-cd frontend
-npm install
-npm run dev                    # Vite dev server (URL shown in terminal)
-```
-
-**Terminal 6 — Attack Simulation** *(validation)*
-```bash
-source .venv/bin/activate
-python3 attack_scripts/exfiltration.py
-```
-
-Watch the sentinel detect, classify, and respond to the live attack in real time on the dashboard.
-
-### Pre-Demo Reset
-
-To reset all state before a demo session:
-```bash
-bash scripts/reset_and_run.sh
-```
-This runs a pre-flight checklist (Python version, Node.js, `.env`, virtual env, model files) and clears ephemeral state.
-
-### Deploying the frontend on Vercel
-
-The Vercel site is only the frontend. The Flask backend still runs on your machine and is reached through a tunnel:
-
-1. Create a free ngrok account, then `export NGROK_AUTHTOKEN=...` and (recommended) `export NGROK_DOMAIN=<your free static domain>.ngrok-free.app`.
-2. Start the backend: `python3 api/dashboard.py`. It prints the public backend URL.
-3. In the Vercel project (Root Directory: `frontend`), set the environment variable `VITE_API_BASE_URL` to that URL and redeploy.
-
-If the backend is not running, the login page says the server is unreachable and offers a clearly labelled demo with simulated data. Nobody can log in without the backend.
+GitHub Actions trains the models and runs the full suite on every push.
 
 ---
 
-## Hardening and operations (added November 2026)
+## Reproducing the experiments
 
-| Area | What it does | Where |
+| Experiment | Command | Output |
 |---|---|---|
-| **Signed events** | Every line in `logs/events.jsonl` carries an HMAC; the sentinel drops unsigned or mis-signed lines (`SENTIHEALTH_REQUIRE_SIGNED_EVENTS=0` for a lab). Export the sensor key with `python3 scripts/export_sensor_key.py`. | `security/event_signing.py`, `webapp/app.js` |
-| **Sessions in SQLite** | Hashed tokens, 8 h lifetime, 30 min idle; survive restarts. No tokens in URLs: the event stream uses one-time 60 s tickets. | `security/sessions.py`, `/api/stream/ticket` |
-| **MFA for every user** | Approving a registration enrols the user in TOTP (QR shown once); static access codes are gone. First run goes through the **setup wizard** (`/setup`) instead of printing secrets to the console. | `/api/setup/*`, `frontend/src/routes/setup.tsx` |
-| **Validation, rate limits, CORS** | Every POST body is schema-checked; per-IP limits on auth and action routes; CORS only for `SENTIHEALTH_ALLOWED_ORIGINS`. | `api/dashboard.py` |
-| **Audit-chain anchoring** | Hourly anchor of the chain head to a file an attacker on the host cannot rewrite (`SENTIHEALTH_ANCHOR_FILE`); mismatches show on the dashboard. | `security/anchoring.py`, `scripts/anchor_chain.py` |
-| **Real response adapters, dry-run first** | Blocks go to an nftables set with a TTL and automatic rollback; account locks call a directory hook (`SENTIHEALTH_LOCK_CMD`). `SENTIHEALTH_DRY_RUN=1` (default) records actions without applying them. | `core/response_adapters.py` |
-| **Raw-event ingestion** | The EHR app sends per-request raw counts; the sentinel keeps each user/IP's history and computes the same windowed features the models were trained on. | `webapp/app.js`, `core/live_sentinel.py` |
-| **Incidents and triage** | Events are grouped into incidents per source; the dashboard's triage queue has keyboard shortcuts (y/n approve or deny with step-up MFA, s snooze, u release block, b/a label, r report). | `core/incidents.py`, `frontend/src/components/dashboard/Triage.tsx` |
-| **Snooze, undo, labels, reports** | Snooze a known-benign entity with a reason (never High tier), release a block from the UI, label incidents for retraining, download a self-contained HTML report. All of these write a signed block to the audit chain. | `/api/entities/…/snooze`, `/api/blocked/…/release`, `/api/review`, `/api/incidents/…/report` |
-| **Pseudonymised display** | Identifiers are shown as pseudonyms; revealing one is itself an audited event. | `PrivacyToggle`, `/api/audit/reveal` |
-| **Model health** | Feature drift (PSI) against the training period, model registry with rollback (`scripts/model_rollback.py`), anchor status, adapter mode. | `ml/drift.py`, `/api/ml/health` |
-| **Canary watch** | Scans configured logs for minted canary tokens and alerts through the cloud-free notifier. | `scripts/canary_watch.py`, `config/canary_watch.json` |
-| **Tabletop mode** | Run the bundled attack simulations from the dashboard (sentinel in `SENTIHEALTH_TEST_MODE=1`). | `/api/admin/simulate/<name>` |
-| **Packaging and CI** | `docker compose up --build` runs every service on one host; GitHub Actions runs tests, type-check, build and dependency audits. | `docker-compose.yml`, `deploy/`, `.github/workflows/ci.yml` |
+| Detection models (synthetic) | `python3 ml/simulate_events.py && python3 ml/train.py && python3 ml/evaluate.py` | `evaluation/REPORT.md` |
+| Deception gate (synthetic) | `python3 ml/experiments/deception_guarantee.py --seeds 5` | `evaluation/DECEPTION.md` |
+| WUSTL-EHMS-2020 | `bash scripts/fetch_datasets.sh wustl && python3 ml/datasets/wustl_ehms.py` | `evaluation/WUSTL_EHMS.md` |
+| CERT r4.2 | `bash scripts/fetch_datasets.sh cert && python3 ml/datasets/cert_r42.py all` | `evaluation/CERT_R42.md` |
+| CERT r4.2 feature ablation | `python3 ml/datasets/cert_r42.py experiment --ablation scenario_web` | `evaluation/CERT_R42_NO_SCENARIO_WEB.md` |
 
-Configuration lives in environment variables; see `.env.example`.
-
-## Technologies Used
-
-| Component | Technology |
-|-----------|------------|
-| Core Sentinel | Python 3.10+ |
-| ML Models | scikit-learn, XGBoost |
-| Model Calibration | `CalibratedClassifierCV` (isotonic, 5-fold CV) |
-| Class Imbalance | SMOTE (imbalanced-learn) |
-| Explainability | SHAP, Matplotlib |
-| EHR Target Server | Node.js, Express |
-| Live Dashboard (backend) | Flask, Plotly |
-| Frontend UI | React, Vite, TypeScript |
-| Admin Notifications | Telegram Bot API, SMTP, console |
-| Cryptography | SHA-256 HMAC (hash-chained audit ledger) |
-| Privacy | Pseudonymisation, Crypto-shredding (AES-256) |
-| MFA | TOTP via `pyotp` (RFC 6238) |
+Public datasets are not redistributed; the fetch script downloads them from their original sources. CERT r4.2 is a 4.8 GB download; the archive can be deleted after extraction.
 
 ---
 
-## Limitations and Future Work
+## Repository layout
 
-| # | Limitation | Planned Enhancement |
-|---|-----------|---------------------|
-| 1 | Audit ledger on a single node (deletable by root attacker) | Migrate to **Hyperledger Fabric** distributed ledger |
-| 2 | IP spoofing dilutes per-IP velocity metrics | IPv6 + MAC cross-referencing, session token fingerprinting |
-| 3 | Telegram alerts require external internet (violates air-gap) | On-premises SMS gateway or hospital pager system (Spok) |
-| 4 | Models learn only from local hospital attacks | **Federated Learning** for cross-hospital weight sharing (HIPAA-compliant) |
-| 5 | Mock Node.js server, not a real EHR | **HL7 FHIR** integration (Epic, Cerner) |
-| 6 | Review queue vulnerable to admin-level model poisoning | Adversarial robustness checks in retraining pipeline |
-| 7 | All detection results are on synthetic data written by the same author as the features | Evaluate on a public benchmark (CIC-IDS2017 / UNSW-NB15 for the network part) and on real, de-identified access logs |
-| 8 | Live events from the web app arrive as 60-second snapshots, so the 1-hour and 24-hour baseline features are only approximated | Send raw per-minute counts to the sentinel and let `ml/features.py` keep the history |
-
-See [`docs/FUTURE_WORK.md`](docs/FUTURE_WORK.md) for detailed discussion of each limitation.
+```
+SentiHealth/
+├── api/            Flask dashboard backend
+├── frontend/       React + TypeScript dashboard
+├── webapp/         Node.js EHR server (the system being protected)
+├── core/           live sentinel, response engine, incidents, review queue
+├── ml/             features, training, scoring, conformal deception gate
+│   ├── datasets/       public-benchmark loaders (CERT r4.2, WUSTL-EHMS-2020)
+│   └── experiments/    deception-guarantee experiment
+├── deception/      decoy records and noise (Mirage)
+├── security/       sessions, signed events, audit-chain anchoring, secrets
+├── privacy/        pseudonymisation, crypto-shredding
+├── notifications/  console, SMTP and Telegram alerting
+├── evaluation/     measured results (Markdown reports and raw JSON)
+├── attack_scripts/ attack simulations for end-to-end testing
+├── demos/          standalone demonstrations
+├── scripts/        setup, dataset download, backups, recovery, monitoring
+├── tests/          pytest suite
+├── config/         thresholds, policies, roster (secrets are created at first run)
+├── models/         model manifest and decision policy (trained models are not committed)
+├── deploy/         Dockerfiles
+└── docs/           research note; archive/ holds the first version's design documents
+```
 
 ---
+
+## Limitations
+
+- **Synthetic EHR data.** The detection models are trained and evaluated on simulated hospital activity. The deception gate is also evaluated on two public datasets, but CERT r4.2 is itself synthetic.
+- **The guarantee needs exchangeability.** It assumes future legitimate sessions resemble the calibration sessions. Under drift it can be exceeded until the gate is recalibrated.
+- **Single-node audit log.** Hash chaining and anchoring make tampering detectable, not impossible, for an attacker with root on the host.
+- **Mock EHR.** The protected system is a small Node.js app, not a production EHR (for example via HL7 FHIR).
 
 ## License
 
-MIT — see [`LICENSE`](LICENSE).
+MIT, see [`LICENSE`](LICENSE).
