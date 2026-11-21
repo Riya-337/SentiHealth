@@ -19,11 +19,23 @@ os.makedirs('data', exist_ok=True)
 os.makedirs('logs', exist_ok=True)
 
 
+import tempfile
+
+import dashboard as _dashboard
 from dashboard import app, init_db, load_users, save_users, _hash_password, _generate_backup_codes
 
 @unittest.skipUnless(HAS_PYOTP, "pyotp is not installed")
 class TestMFA(unittest.TestCase):
     def setUp(self):
+        # Lockouts go to a temporary file, never the real logs/locked_accounts.json; patch the module
+        # this file's `app` came from (test_hardening reloads the dashboard module).
+        self._tmp = tempfile.TemporaryDirectory()
+        self._real_locked = _dashboard.LOCKED_ACCOUNTS
+        _dashboard.LOCKED_ACCOUNTS = os.path.join(self._tmp.name, "locked_accounts.json")
+        _dashboard._rl_buckets.clear()
+        with _dashboard._failed_attempts_lock:
+            _dashboard._failed_login_attempts.clear()
+
         self.app = app.test_client()
         self.app.testing = True
 
@@ -41,6 +53,10 @@ class TestMFA(unittest.TestCase):
             }
         }
         save_users(users)
+
+    def tearDown(self):
+        _dashboard.LOCKED_ACCOUNTS = self._real_locked
+        self._tmp.cleanup()
 
     def test_mfa_totp_login_success(self):
         # 1. Login with password

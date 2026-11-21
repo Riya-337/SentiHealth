@@ -26,7 +26,7 @@ import secrets
 import threading
 import time
 from functools import wraps
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 # Ensure project root is on sys.path so _paths and sibling modules are importable
 # from any working directory the user launches this script from.
@@ -508,22 +508,76 @@ _failed_login_attempts: dict[str, list[float]] = {}
 _failed_attempts_lock = threading.Lock()
 _MAX_FAILED_ATTEMPTS = 5
 _LOCKOUT_WINDOW_SEC = 900  # 15 minutes
+# Automatic lockouts lift on their own. A permanent one would let anyone lock the admin out by
+# typing 5 wrong passwords (denial of service). Locks from the tiered responder have no expiry.
+_LOCKOUT_DURATION_SEC = _LOCKOUT_WINDOW_SEC
+_AUTO_LOCK_REASON = "Excessive failed authentication attempts"
+
+
+def _read_lock_entries() -> list:
+    """locked_accounts.json is a JSON array (written here) or JSON lines (self_healing_responder)."""
+    if not os.path.exists(LOCKED_ACCOUNTS):
+        return []
+    with open(LOCKED_ACCOUNTS, "r", encoding="utf-8") as f:
+        text = f.read().strip()
+    if not text:
+        return []
+    if text.startswith("["):
+        try:
+            return [e for e in json.loads(text) if isinstance(e, dict)]
+        except json.JSONDecodeError:
+            pass
+    entries = []
+    for line in text.splitlines():
+        try:
+            e = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(e, dict):
+            entries.append(e)
+    return entries
+
+
+def _lock_expiry(entry: dict) -> datetime | None:
+    """When an automatic lockout lifts; None for locks that stay until an admin removes them.
+    An unreadable timestamp also gives None, so a damaged entry stays locked (fail closed)."""
+    def parse(s: str) -> datetime:
+        d = datetime.fromisoformat(s)
+        return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
+    try:
+        if entry.get("expires_at"):
+            return parse(entry["expires_at"])
+        # automatic lockouts written before expiry existed
+        if str(entry.get("reason", "")).startswith(_AUTO_LOCK_REASON) and entry.get("locked_at"):
+            return parse(entry["locked_at"]) + timedelta(seconds=_LOCKOUT_DURATION_SEC)
+    except (TypeError, ValueError):
+        return None
+    return None
+
+
+def _lock_active(entry: dict, now: datetime) -> bool:
+    if entry.get("status") != "locked":
+        return False
+    expiry = _lock_expiry(entry)
+    return expiry is None or now < expiry
 
 
 def _is_rate_limited_or_locked(username: str, ip: str) -> tuple[bool, str]:
     """Check if username or IP is rate-limited / locked out."""
     now = time.time()
-    
+
     # 1. Check locked_accounts.json file
-    if os.path.exists(LOCKED_ACCOUNTS):
-        try:
-            with open(LOCKED_ACCOUNTS, "r", encoding="utf-8") as f:
-                locked_list = json.load(f)
-                for entry in locked_list:
-                    if (entry.get("username") == username or entry.get("ip") == ip) and entry.get("status") == "locked":
-                        return True, f"Account or IP '{username}' is locked. Contact administrator or use recovery."
-        except Exception:
-            pass
+    try:
+        now_dt = datetime.now(timezone.utc)
+        for entry in _read_lock_entries():
+            if (entry.get("username") == username or entry.get("ip") == ip) and _lock_active(entry, now_dt):
+                expiry = _lock_expiry(entry)
+                if expiry is None:
+                    return True, f"Account or IP '{username}' is locked. Contact administrator or use recovery."
+                minutes = max(1, int((expiry - now_dt).total_seconds() // 60) + 1)
+                return True, f"Account locked after 5 failed login attempts. Try again in {minutes} minute(s) or use recovery."
+    except Exception:
+        pass
 
     # 2. Check in-memory rolling window (5 failures in 15 mins)
     with _failed_attempts_lock:
@@ -559,19 +613,19 @@ def _record_success_attempt(username: str, ip: str):
 def _lock_account_persistent(username: str, ip: str, reason: str):
     """Write lockout entry to locked_accounts.json and tamper_alerts.log."""
     try:
-        locked_list = []
-        if os.path.exists(LOCKED_ACCOUNTS):
-            with open(LOCKED_ACCOUNTS, "r", encoding="utf-8") as f:
-                locked_list = json.load(f)
-        
-        existing = next((e for e in locked_list if e.get("username") == username and e.get("status") == "locked"), None)
+        now = datetime.now(timezone.utc)
+        # expired automatic lockouts are dropped; every other entry is kept
+        locked_list = [e for e in _read_lock_entries() if e.get("status") != "locked" or _lock_active(e, now)]
+
+        existing = next((e for e in locked_list if e.get("username") == username and _lock_active(e, now)), None)
         if not existing:
             entry = {
                 "username": username,
                 "ip": ip,
                 "status": "locked",
                 "reason": reason,
-                "locked_at": datetime.now(timezone.utc).isoformat(),
+                "locked_at": now.isoformat(),
+                "expires_at": (now + timedelta(seconds=_LOCKOUT_DURATION_SEC)).isoformat(),
             }
             locked_list.append(entry)
             with open(LOCKED_ACCOUNTS, "w", encoding="utf-8") as f:
