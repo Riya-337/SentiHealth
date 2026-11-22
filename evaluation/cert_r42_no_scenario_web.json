@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-21T16:40:40+00:00",
+  "generated_at": "2026-11-21T18:21:25+00:00",
   "features": [
     "logon_n",
     "logon_after",
@@ -47,6 +47,8 @@
           "pooled_0.1": {
             "legit_n": 78357,
             "legit_deceived_count": 7000,
+            "n_significant_users": 3,
+            "n_groups_users": 29,
             "malicious_deceived": 1.0,
             "per_group_legit": {
               "Accountant": 0.007434944237918215,
@@ -90,6 +92,8 @@
           "mondrian_0.1": {
             "legit_n": 78357,
             "legit_deceived_count": 7013,
+            "n_significant_users": 1,
+            "n_groups_users": 29,
             "malicious_deceived": 1.0,
             "per_group_legit": {
               "Accountant": 0.10780669144981413,
@@ -133,6 +137,8 @@
           "pooled_0.05": {
             "legit_n": 78357,
             "legit_deceived_count": 3573,
+            "n_significant_users": 2,
+            "n_groups_users": 29,
             "malicious_deceived": 1.0,
             "per_group_legit": {
               "Accountant": 0.0037174721189591076,
@@ -176,6 +182,8 @@
           "mondrian_0.05": {
             "legit_n": 78357,
             "legit_deceived_count": 3625,
+            "n_significant_users": 1,
+            "n_groups_users": 29,
             "malicious_deceived": 0.991869918699187,
             "per_group_legit": {
               "Accountant": 0.04460966542750929,
@@ -219,6 +227,8 @@
           "pooled_0.01": {
             "legit_n": 78357,
             "legit_deceived_count": 629,
+            "n_significant_users": 0,
+            "n_groups_users": 29,
             "malicious_deceived": 0.975609756097561,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -262,6 +272,8 @@
           "mondrian_0.01": {
             "legit_n": 78357,
             "legit_deceived_count": 712,
+            "n_significant_users": 0,
+            "n_groups_users": 29,
             "malicious_deceived": 0.959349593495935,
             "per_group_legit": {
               "Accountant": 0.0037174721189591076,
@@ -305,6 +317,8 @@
           "pooled_0.005": {
             "legit_n": 78357,
             "legit_deceived_count": 253,
+            "n_significant_users": 0,
+            "n_groups_users": 29,
             "malicious_deceived": 0.9512195121951219,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -348,6 +362,8 @@
           "mondrian_0.005": {
             "legit_n": 78357,
             "legit_deceived_count": 377,
+            "n_significant_users": 0,
+            "n_groups_users": 29,
             "malicious_deceived": 0.943089430894309,
             "per_group_legit": {
               "Accountant": 0.0037174721189591076,
@@ -393,6 +409,8 @@
           "pooled_0.1": {
             "legit_n": 78026,
             "legit_deceived_count": 7842,
+            "n_significant_users": 5,
+            "n_groups_users": 30,
             "malicious_deceived": 0.9946524064171123,
             "per_group_legit": {
               "Accountant": 0.011194029850746268,
@@ -436,6 +454,8 @@
           "mondrian_0.1": {
             "legit_n": 78026,
             "legit_deceived_count": 7802,
+            "n_significant_users": 0,
+            "n_groups_users": 30,
             "malicious_deceived": 0.9946524064171123,
             "per_group_legit": {
               "Accountant": 0.0708955223880597,
@@ -479,6 +499,8 @@
           "pooled_0.05": {
             "legit_n": 78026,
             "legit_deceived_count": 3985,
+            "n_significant_users": 3,
+            "n_groups_users": 30,
             "malicious_deceived": 0.9946524064171123,
             "per_group_legit": {
               "Accountant": 0.0037313432835820895,
@@ -522,6 +544,8 @@
           "mondrian_0.05": {
             "legit_n": 78026,
             "legit_deceived_count": 3943,
+            "n_significant_users": 0,
+            "n_groups_users": 30,
             "malicious_deceived": 0.9946524064171123,
             "per_group_legit": {
               "Accountant": 0.022388059701492536,
@@ -565,6 +589,8 @@
           "pooled_0.01": {
             "legit_n": 78026,
             "legit_deceived_count": 772,
+            "n_significant_users": 1,
+            "n_groups_users": 30,
             "malicious_deceived": 0.9625668449197861,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -608,6 +634,8 @@
           "mondrian_0.01": {
             "legit_n": 78026,
             "legit_deceived_count": 766,
+            "n_significant_users": 0,
+            "n_groups_users": 30,
             "malicious_deceived": 0.9411764705882353,
             "per_group_legit": {
               "Accountant": 0.011194029850746268,
@@ -651,6 +679,8 @@
           "pooled_0.005": {
             "legit_n": 78026,
             "legit_deceived_count": 383,
+            "n_significant_users": 0,
+            "n_groups_users": 30,
             "malicious_deceived": 0.9197860962566845,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -694,6 +724,8 @@
           "mondrian_0.005": {
             "legit_n": 78026,
             "legit_deceived_count": 362,
+            "n_significant_users": 0,
+            "n_groups_users": 30,
             "malicious_deceived": 0.8556149732620321,
             "per_group_legit": {
               "Accountant": 0.007462686567164179,
@@ -743,6 +775,8 @@
           "pooled_0.1": {
             "legit_n": 78357,
             "legit_deceived_count": 7308,
+            "n_significant_users": 2,
+            "n_groups_users": 29,
             "malicious_deceived": 0.5284552845528455,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -786,6 +820,8 @@
           "mondrian_0.1": {
             "legit_n": 78357,
             "legit_deceived_count": 7216,
+            "n_significant_users": 0,
+            "n_groups_users": 29,
             "malicious_deceived": 0.6178861788617886,
             "per_group_legit": {
               "Accountant": 0.11524163568773234,
@@ -829,6 +865,8 @@
           "pooled_0.05": {
             "legit_n": 78357,
             "legit_deceived_count": 3602,
+            "n_significant_users": 3,
+            "n_groups_users": 29,
             "malicious_deceived": 0.23577235772357724,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -872,6 +910,8 @@
           "mondrian_0.05": {
             "legit_n": 78357,
             "legit_deceived_count": 3518,
+            "n_significant_users": 0,
+            "n_groups_users": 29,
             "malicious_deceived": 0.43902439024390244,
             "per_group_legit": {
               "Accountant": 0.055762081784386616,
@@ -915,6 +955,8 @@
           "pooled_0.01": {
             "legit_n": 78357,
             "legit_deceived_count": 743,
+            "n_significant_users": 1,
+            "n_groups_users": 29,
             "malicious_deceived": 0.032520325203252036,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -958,6 +1000,8 @@
           "mondrian_0.01": {
             "legit_n": 78357,
             "legit_deceived_count": 665,
+            "n_significant_users": 0,
+            "n_groups_users": 29,
             "malicious_deceived": 0.08943089430894309,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -1001,6 +1045,8 @@
           "pooled_0.005": {
             "legit_n": 78357,
             "legit_deceived_count": 363,
+            "n_significant_users": 0,
+            "n_groups_users": 29,
             "malicious_deceived": 0.024390243902439025,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -1044,6 +1090,8 @@
           "mondrian_0.005": {
             "legit_n": 78357,
             "legit_deceived_count": 287,
+            "n_significant_users": 0,
+            "n_groups_users": 29,
             "malicious_deceived": 0.016260162601626018,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -1089,6 +1137,8 @@
           "pooled_0.1": {
             "legit_n": 78026,
             "legit_deceived_count": 8005,
+            "n_significant_users": 2,
+            "n_groups_users": 30,
             "malicious_deceived": 0.6310160427807486,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -1132,6 +1182,8 @@
           "mondrian_0.1": {
             "legit_n": 78026,
             "legit_deceived_count": 7838,
+            "n_significant_users": 0,
+            "n_groups_users": 30,
             "malicious_deceived": 0.7112299465240641,
             "per_group_legit": {
               "Accountant": 0.10074626865671642,
@@ -1175,6 +1227,8 @@
           "pooled_0.05": {
             "legit_n": 78026,
             "legit_deceived_count": 3950,
+            "n_significant_users": 2,
+            "n_groups_users": 30,
             "malicious_deceived": 0.3155080213903743,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -1218,6 +1272,8 @@
           "mondrian_0.05": {
             "legit_n": 78026,
             "legit_deceived_count": 3980,
+            "n_significant_users": 0,
+            "n_groups_users": 30,
             "malicious_deceived": 0.5454545454545454,
             "per_group_legit": {
               "Accountant": 0.04477611940298507,
@@ -1261,6 +1317,8 @@
           "pooled_0.01": {
             "legit_n": 78026,
             "legit_deceived_count": 780,
+            "n_significant_users": 2,
+            "n_groups_users": 30,
             "malicious_deceived": 0.09090909090909091,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -1304,6 +1362,8 @@
           "mondrian_0.01": {
             "legit_n": 78026,
             "legit_deceived_count": 702,
+            "n_significant_users": 0,
+            "n_groups_users": 30,
             "malicious_deceived": 0.15508021390374332,
             "per_group_legit": {
               "Accountant": 0.0037313432835820895,
@@ -1347,6 +1407,8 @@
           "pooled_0.005": {
             "legit_n": 78026,
             "legit_deceived_count": 390,
+            "n_significant_users": 1,
+            "n_groups_users": 30,
             "malicious_deceived": 0.08021390374331551,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -1390,6 +1452,8 @@
           "mondrian_0.005": {
             "legit_n": 78026,
             "legit_deceived_count": 339,
+            "n_significant_users": 0,
+            "n_groups_users": 30,
             "malicious_deceived": 0.08021390374331551,
             "per_group_legit": {
               "Accountant": 0.0037313432835820895,
@@ -1442,6 +1506,8 @@
           "pooled_0.1": {
             "legit_n": 78357,
             "legit_deceived_count": 7031,
+            "n_significant_users": 4,
+            "n_groups_users": 29,
             "malicious_deceived": 1.0,
             "per_group_legit": {
               "Accountant": 0.007434944237918215,
@@ -1485,6 +1551,8 @@
           "mondrian_0.1": {
             "legit_n": 78357,
             "legit_deceived_count": 6967,
+            "n_significant_users": 1,
+            "n_groups_users": 29,
             "malicious_deceived": 1.0,
             "per_group_legit": {
               "Accountant": 0.08550185873605948,
@@ -1528,6 +1596,8 @@
           "pooled_0.05": {
             "legit_n": 78357,
             "legit_deceived_count": 3516,
+            "n_significant_users": 2,
+            "n_groups_users": 29,
             "malicious_deceived": 1.0,
             "per_group_legit": {
               "Accountant": 0.0037174721189591076,
@@ -1571,6 +1641,8 @@
           "mondrian_0.05": {
             "legit_n": 78357,
             "legit_deceived_count": 3611,
+            "n_significant_users": 1,
+            "n_groups_users": 29,
             "malicious_deceived": 0.983739837398374,
             "per_group_legit": {
               "Accountant": 0.05204460966542751,
@@ -1614,6 +1686,8 @@
           "pooled_0.01": {
             "legit_n": 78357,
             "legit_deceived_count": 653,
+            "n_significant_users": 1,
+            "n_groups_users": 29,
             "malicious_deceived": 0.975609756097561,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -1657,6 +1731,8 @@
           "mondrian_0.01": {
             "legit_n": 78357,
             "legit_deceived_count": 752,
+            "n_significant_users": 0,
+            "n_groups_users": 29,
             "malicious_deceived": 0.967479674796748,
             "per_group_legit": {
               "Accountant": 0.007434944237918215,
@@ -1700,6 +1776,8 @@
           "pooled_0.005": {
             "legit_n": 78357,
             "legit_deceived_count": 261,
+            "n_significant_users": 0,
+            "n_groups_users": 29,
             "malicious_deceived": 0.9512195121951219,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -1743,6 +1821,8 @@
           "mondrian_0.005": {
             "legit_n": 78357,
             "legit_deceived_count": 375,
+            "n_significant_users": 0,
+            "n_groups_users": 29,
             "malicious_deceived": 0.9512195121951219,
             "per_group_legit": {
               "Accountant": 0.007434944237918215,
@@ -1788,6 +1868,8 @@
           "pooled_0.1": {
             "legit_n": 78041,
             "legit_deceived_count": 7848,
+            "n_significant_users": 6,
+            "n_groups_users": 30,
             "malicious_deceived": 0.9941860465116279,
             "per_group_legit": {
               "Accountant": 0.0037735849056603774,
@@ -1831,6 +1913,8 @@
           "mondrian_0.1": {
             "legit_n": 78041,
             "legit_deceived_count": 7855,
+            "n_significant_users": 0,
+            "n_groups_users": 30,
             "malicious_deceived": 0.9941860465116279,
             "per_group_legit": {
               "Accountant": 0.0830188679245283,
@@ -1874,6 +1958,8 @@
           "pooled_0.05": {
             "legit_n": 78041,
             "legit_deceived_count": 3952,
+            "n_significant_users": 2,
+            "n_groups_users": 30,
             "malicious_deceived": 0.9941860465116279,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -1917,6 +2003,8 @@
           "mondrian_0.05": {
             "legit_n": 78041,
             "legit_deceived_count": 3851,
+            "n_significant_users": 0,
+            "n_groups_users": 30,
             "malicious_deceived": 0.9941860465116279,
             "per_group_legit": {
               "Accountant": 0.052830188679245285,
@@ -1960,6 +2048,8 @@
           "pooled_0.01": {
             "legit_n": 78041,
             "legit_deceived_count": 803,
+            "n_significant_users": 2,
+            "n_groups_users": 30,
             "malicious_deceived": 0.9709302325581395,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -2003,6 +2093,8 @@
           "mondrian_0.01": {
             "legit_n": 78041,
             "legit_deceived_count": 784,
+            "n_significant_users": 0,
+            "n_groups_users": 30,
             "malicious_deceived": 0.9534883720930233,
             "per_group_legit": {
               "Accountant": 0.0037735849056603774,
@@ -2046,6 +2138,8 @@
           "pooled_0.005": {
             "legit_n": 78041,
             "legit_deceived_count": 384,
+            "n_significant_users": 1,
+            "n_groups_users": 30,
             "malicious_deceived": 0.9418604651162791,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -2089,6 +2183,8 @@
           "mondrian_0.005": {
             "legit_n": 78041,
             "legit_deceived_count": 373,
+            "n_significant_users": 0,
+            "n_groups_users": 30,
             "malicious_deceived": 0.8953488372093024,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -2138,6 +2234,8 @@
           "pooled_0.1": {
             "legit_n": 78357,
             "legit_deceived_count": 7309,
+            "n_significant_users": 2,
+            "n_groups_users": 29,
             "malicious_deceived": 0.5609756097560976,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -2181,6 +2279,8 @@
           "mondrian_0.1": {
             "legit_n": 78357,
             "legit_deceived_count": 7230,
+            "n_significant_users": 0,
+            "n_groups_users": 29,
             "malicious_deceived": 0.6504065040650406,
             "per_group_legit": {
               "Accountant": 0.12267657992565056,
@@ -2224,6 +2324,8 @@
           "pooled_0.05": {
             "legit_n": 78357,
             "legit_deceived_count": 3585,
+            "n_significant_users": 3,
+            "n_groups_users": 29,
             "malicious_deceived": 0.2601626016260163,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -2267,6 +2369,8 @@
           "mondrian_0.05": {
             "legit_n": 78357,
             "legit_deceived_count": 3558,
+            "n_significant_users": 0,
+            "n_groups_users": 29,
             "malicious_deceived": 0.43902439024390244,
             "per_group_legit": {
               "Accountant": 0.05947955390334572,
@@ -2310,6 +2414,8 @@
           "pooled_0.01": {
             "legit_n": 78357,
             "legit_deceived_count": 740,
+            "n_significant_users": 1,
+            "n_groups_users": 29,
             "malicious_deceived": 0.024390243902439025,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -2353,6 +2459,8 @@
           "mondrian_0.01": {
             "legit_n": 78357,
             "legit_deceived_count": 652,
+            "n_significant_users": 0,
+            "n_groups_users": 29,
             "malicious_deceived": 0.08130081300813008,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -2396,6 +2504,8 @@
           "pooled_0.005": {
             "legit_n": 78357,
             "legit_deceived_count": 358,
+            "n_significant_users": 0,
+            "n_groups_users": 29,
             "malicious_deceived": 0.024390243902439025,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -2439,6 +2549,8 @@
           "mondrian_0.005": {
             "legit_n": 78357,
             "legit_deceived_count": 308,
+            "n_significant_users": 0,
+            "n_groups_users": 29,
             "malicious_deceived": 0.032520325203252036,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -2484,6 +2596,8 @@
           "pooled_0.1": {
             "legit_n": 78041,
             "legit_deceived_count": 7872,
+            "n_significant_users": 2,
+            "n_groups_users": 30,
             "malicious_deceived": 0.5988372093023255,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -2527,6 +2641,8 @@
           "mondrian_0.1": {
             "legit_n": 78041,
             "legit_deceived_count": 7876,
+            "n_significant_users": 0,
+            "n_groups_users": 30,
             "malicious_deceived": 0.686046511627907,
             "per_group_legit": {
               "Accountant": 0.1018867924528302,
@@ -2570,6 +2686,8 @@
           "pooled_0.05": {
             "legit_n": 78041,
             "legit_deceived_count": 3965,
+            "n_significant_users": 2,
+            "n_groups_users": 30,
             "malicious_deceived": 0.36627906976744184,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -2613,6 +2731,8 @@
           "mondrian_0.05": {
             "legit_n": 78041,
             "legit_deceived_count": 3904,
+            "n_significant_users": 0,
+            "n_groups_users": 30,
             "malicious_deceived": 0.5290697674418605,
             "per_group_legit": {
               "Accountant": 0.06415094339622641,
@@ -2656,6 +2776,8 @@
           "pooled_0.01": {
             "legit_n": 78041,
             "legit_deceived_count": 795,
+            "n_significant_users": 2,
+            "n_groups_users": 30,
             "malicious_deceived": 0.06395348837209303,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -2699,6 +2821,8 @@
           "mondrian_0.01": {
             "legit_n": 78041,
             "legit_deceived_count": 730,
+            "n_significant_users": 0,
+            "n_groups_users": 30,
             "malicious_deceived": 0.19767441860465115,
             "per_group_legit": {
               "Accountant": 0.007547169811320755,
@@ -2742,6 +2866,8 @@
           "pooled_0.005": {
             "legit_n": 78041,
             "legit_deceived_count": 388,
+            "n_significant_users": 1,
+            "n_groups_users": 30,
             "malicious_deceived": 0.05232558139534884,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -2785,6 +2911,8 @@
           "mondrian_0.005": {
             "legit_n": 78041,
             "legit_deceived_count": 357,
+            "n_significant_users": 0,
+            "n_groups_users": 30,
             "malicious_deceived": 0.09883720930232558,
             "per_group_legit": {
               "Accountant": 0.007547169811320755,
@@ -2837,6 +2965,8 @@
           "pooled_0.1": {
             "legit_n": 78357,
             "legit_deceived_count": 7048,
+            "n_significant_users": 3,
+            "n_groups_users": 29,
             "malicious_deceived": 1.0,
             "per_group_legit": {
               "Accountant": 0.03345724907063197,
@@ -2880,6 +3010,8 @@
           "mondrian_0.1": {
             "legit_n": 78357,
             "legit_deceived_count": 7012,
+            "n_significant_users": 1,
+            "n_groups_users": 29,
             "malicious_deceived": 1.0,
             "per_group_legit": {
               "Accountant": 0.10780669144981413,
@@ -2923,6 +3055,8 @@
           "pooled_0.05": {
             "legit_n": 78357,
             "legit_deceived_count": 3454,
+            "n_significant_users": 2,
+            "n_groups_users": 29,
             "malicious_deceived": 1.0,
             "per_group_legit": {
               "Accountant": 0.0037174721189591076,
@@ -2966,6 +3100,8 @@
           "mondrian_0.05": {
             "legit_n": 78357,
             "legit_deceived_count": 3623,
+            "n_significant_users": 0,
+            "n_groups_users": 29,
             "malicious_deceived": 0.991869918699187,
             "per_group_legit": {
               "Accountant": 0.08550185873605948,
@@ -3009,6 +3145,8 @@
           "pooled_0.01": {
             "legit_n": 78357,
             "legit_deceived_count": 623,
+            "n_significant_users": 0,
+            "n_groups_users": 29,
             "malicious_deceived": 0.9512195121951219,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -3052,6 +3190,8 @@
           "mondrian_0.01": {
             "legit_n": 78357,
             "legit_deceived_count": 722,
+            "n_significant_users": 0,
+            "n_groups_users": 29,
             "malicious_deceived": 0.959349593495935,
             "per_group_legit": {
               "Accountant": 0.007434944237918215,
@@ -3095,6 +3235,8 @@
           "pooled_0.005": {
             "legit_n": 78357,
             "legit_deceived_count": 254,
+            "n_significant_users": 0,
+            "n_groups_users": 29,
             "malicious_deceived": 0.9512195121951219,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -3138,6 +3280,8 @@
           "mondrian_0.005": {
             "legit_n": 78357,
             "legit_deceived_count": 378,
+            "n_significant_users": 0,
+            "n_groups_users": 29,
             "malicious_deceived": 0.959349593495935,
             "per_group_legit": {
               "Accountant": 0.007434944237918215,
@@ -3183,6 +3327,8 @@
           "pooled_0.1": {
             "legit_n": 78038,
             "legit_deceived_count": 7811,
+            "n_significant_users": 3,
+            "n_groups_users": 30,
             "malicious_deceived": 0.9942857142857143,
             "per_group_legit": {
               "Accountant": 0.03787878787878788,
@@ -3226,6 +3372,8 @@
           "mondrian_0.1": {
             "legit_n": 78038,
             "legit_deceived_count": 7768,
+            "n_significant_users": 0,
+            "n_groups_users": 30,
             "malicious_deceived": 1.0,
             "per_group_legit": {
               "Accountant": 0.10606060606060606,
@@ -3269,6 +3417,8 @@
           "pooled_0.05": {
             "legit_n": 78038,
             "legit_deceived_count": 3991,
+            "n_significant_users": 2,
+            "n_groups_users": 30,
             "malicious_deceived": 0.9942857142857143,
             "per_group_legit": {
               "Accountant": 0.003787878787878788,
@@ -3312,6 +3462,8 @@
           "mondrian_0.05": {
             "legit_n": 78038,
             "legit_deceived_count": 3976,
+            "n_significant_users": 0,
+            "n_groups_users": 30,
             "malicious_deceived": 0.9942857142857143,
             "per_group_legit": {
               "Accountant": 0.05303030303030303,
@@ -3355,6 +3507,8 @@
           "pooled_0.01": {
             "legit_n": 78038,
             "legit_deceived_count": 806,
+            "n_significant_users": 1,
+            "n_groups_users": 30,
             "malicious_deceived": 0.9428571428571428,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -3398,6 +3552,8 @@
           "mondrian_0.01": {
             "legit_n": 78038,
             "legit_deceived_count": 771,
+            "n_significant_users": 0,
+            "n_groups_users": 30,
             "malicious_deceived": 0.9428571428571428,
             "per_group_legit": {
               "Accountant": 0.015151515151515152,
@@ -3441,6 +3597,8 @@
           "pooled_0.005": {
             "legit_n": 78038,
             "legit_deceived_count": 394,
+            "n_significant_users": 0,
+            "n_groups_users": 30,
             "malicious_deceived": 0.92,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -3484,6 +3642,8 @@
           "mondrian_0.005": {
             "legit_n": 78038,
             "legit_deceived_count": 359,
+            "n_significant_users": 0,
+            "n_groups_users": 30,
             "malicious_deceived": 0.88,
             "per_group_legit": {
               "Accountant": 0.015151515151515152,
@@ -3533,6 +3693,8 @@
           "pooled_0.1": {
             "legit_n": 78357,
             "legit_deceived_count": 7293,
+            "n_significant_users": 2,
+            "n_groups_users": 29,
             "malicious_deceived": 0.44715447154471544,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -3576,6 +3738,8 @@
           "mondrian_0.1": {
             "legit_n": 78357,
             "legit_deceived_count": 7200,
+            "n_significant_users": 0,
+            "n_groups_users": 29,
             "malicious_deceived": 0.5934959349593496,
             "per_group_legit": {
               "Accountant": 0.11152416356877323,
@@ -3619,6 +3783,8 @@
           "pooled_0.05": {
             "legit_n": 78357,
             "legit_deceived_count": 3630,
+            "n_significant_users": 3,
+            "n_groups_users": 29,
             "malicious_deceived": 0.14634146341463414,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -3662,6 +3828,8 @@
           "mondrian_0.05": {
             "legit_n": 78357,
             "legit_deceived_count": 3568,
+            "n_significant_users": 0,
+            "n_groups_users": 29,
             "malicious_deceived": 0.36585365853658536,
             "per_group_legit": {
               "Accountant": 0.06691449814126393,
@@ -3705,6 +3873,8 @@
           "pooled_0.01": {
             "legit_n": 78357,
             "legit_deceived_count": 748,
+            "n_significant_users": 0,
+            "n_groups_users": 29,
             "malicious_deceived": 0.032520325203252036,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -3748,6 +3918,8 @@
           "mondrian_0.01": {
             "legit_n": 78357,
             "legit_deceived_count": 649,
+            "n_significant_users": 0,
+            "n_groups_users": 29,
             "malicious_deceived": 0.04065040650406504,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -3791,6 +3963,8 @@
           "pooled_0.005": {
             "legit_n": 78357,
             "legit_deceived_count": 365,
+            "n_significant_users": 0,
+            "n_groups_users": 29,
             "malicious_deceived": 0.024390243902439025,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -3834,6 +4008,8 @@
           "mondrian_0.005": {
             "legit_n": 78357,
             "legit_deceived_count": 322,
+            "n_significant_users": 0,
+            "n_groups_users": 29,
             "malicious_deceived": 0.008130081300813009,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -3879,6 +4055,8 @@
           "pooled_0.1": {
             "legit_n": 78038,
             "legit_deceived_count": 7894,
+            "n_significant_users": 2,
+            "n_groups_users": 30,
             "malicious_deceived": 0.56,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -3922,6 +4100,8 @@
           "mondrian_0.1": {
             "legit_n": 78038,
             "legit_deceived_count": 8014,
+            "n_significant_users": 0,
+            "n_groups_users": 30,
             "malicious_deceived": 0.6971428571428572,
             "per_group_legit": {
               "Accountant": 0.05303030303030303,
@@ -3965,6 +4145,8 @@
           "pooled_0.05": {
             "legit_n": 78038,
             "legit_deceived_count": 3937,
+            "n_significant_users": 2,
+            "n_groups_users": 30,
             "malicious_deceived": 0.3028571428571429,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -4008,6 +4190,8 @@
           "mondrian_0.05": {
             "legit_n": 78038,
             "legit_deceived_count": 3983,
+            "n_significant_users": 0,
+            "n_groups_users": 30,
             "malicious_deceived": 0.5314285714285715,
             "per_group_legit": {
               "Accountant": 0.01893939393939394,
@@ -4051,6 +4235,8 @@
           "pooled_0.01": {
             "legit_n": 78038,
             "legit_deceived_count": 753,
+            "n_significant_users": 1,
+            "n_groups_users": 30,
             "malicious_deceived": 0.08571428571428572,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -4094,6 +4280,8 @@
           "mondrian_0.01": {
             "legit_n": 78038,
             "legit_deceived_count": 802,
+            "n_significant_users": 0,
+            "n_groups_users": 30,
             "malicious_deceived": 0.1657142857142857,
             "per_group_legit": {
               "Accountant": 0.011363636363636364,
@@ -4137,6 +4325,8 @@
           "pooled_0.005": {
             "legit_n": 78038,
             "legit_deceived_count": 391,
+            "n_significant_users": 1,
+            "n_groups_users": 30,
             "malicious_deceived": 0.05714285714285714,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -4180,6 +4370,8 @@
           "mondrian_0.005": {
             "legit_n": 78038,
             "legit_deceived_count": 383,
+            "n_significant_users": 0,
+            "n_groups_users": 30,
             "malicious_deceived": 0.09714285714285714,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -4232,6 +4424,8 @@
           "pooled_0.1": {
             "legit_n": 78357,
             "legit_deceived_count": 7040,
+            "n_significant_users": 3,
+            "n_groups_users": 29,
             "malicious_deceived": 1.0,
             "per_group_legit": {
               "Accountant": 0.011152416356877323,
@@ -4275,6 +4469,8 @@
           "mondrian_0.1": {
             "legit_n": 78357,
             "legit_deceived_count": 7107,
+            "n_significant_users": 1,
+            "n_groups_users": 29,
             "malicious_deceived": 1.0,
             "per_group_legit": {
               "Accountant": 0.1524163568773234,
@@ -4318,6 +4514,8 @@
           "pooled_0.05": {
             "legit_n": 78357,
             "legit_deceived_count": 3600,
+            "n_significant_users": 2,
+            "n_groups_users": 29,
             "malicious_deceived": 1.0,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -4361,6 +4559,8 @@
           "mondrian_0.05": {
             "legit_n": 78357,
             "legit_deceived_count": 3599,
+            "n_significant_users": 1,
+            "n_groups_users": 29,
             "malicious_deceived": 1.0,
             "per_group_legit": {
               "Accountant": 0.08921933085501858,
@@ -4404,6 +4604,8 @@
           "pooled_0.01": {
             "legit_n": 78357,
             "legit_deceived_count": 665,
+            "n_significant_users": 1,
+            "n_groups_users": 29,
             "malicious_deceived": 0.967479674796748,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -4447,6 +4649,8 @@
           "mondrian_0.01": {
             "legit_n": 78357,
             "legit_deceived_count": 717,
+            "n_significant_users": 0,
+            "n_groups_users": 29,
             "malicious_deceived": 0.959349593495935,
             "per_group_legit": {
               "Accountant": 0.0037174721189591076,
@@ -4490,6 +4694,8 @@
           "pooled_0.005": {
             "legit_n": 78357,
             "legit_deceived_count": 282,
+            "n_significant_users": 0,
+            "n_groups_users": 29,
             "malicious_deceived": 0.9512195121951219,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -4533,6 +4739,8 @@
           "mondrian_0.005": {
             "legit_n": 78357,
             "legit_deceived_count": 387,
+            "n_significant_users": 0,
+            "n_groups_users": 29,
             "malicious_deceived": 0.9512195121951219,
             "per_group_legit": {
               "Accountant": 0.0037174721189591076,
@@ -4578,6 +4786,8 @@
           "pooled_0.1": {
             "legit_n": 78023,
             "legit_deceived_count": 7985,
+            "n_significant_users": 6,
+            "n_groups_users": 30,
             "malicious_deceived": 0.9947368421052631,
             "per_group_legit": {
               "Accountant": 0.007518796992481203,
@@ -4621,6 +4831,8 @@
           "mondrian_0.1": {
             "legit_n": 78023,
             "legit_deceived_count": 7848,
+            "n_significant_users": 0,
+            "n_groups_users": 30,
             "malicious_deceived": 0.9947368421052631,
             "per_group_legit": {
               "Accountant": 0.045112781954887216,
@@ -4664,6 +4876,8 @@
           "pooled_0.05": {
             "legit_n": 78023,
             "legit_deceived_count": 4072,
+            "n_significant_users": 2,
+            "n_groups_users": 30,
             "malicious_deceived": 0.9947368421052631,
             "per_group_legit": {
               "Accountant": 0.0037593984962406013,
@@ -4707,6 +4921,8 @@
           "mondrian_0.05": {
             "legit_n": 78023,
             "legit_deceived_count": 3956,
+            "n_significant_users": 0,
+            "n_groups_users": 30,
             "malicious_deceived": 0.9947368421052631,
             "per_group_legit": {
               "Accountant": 0.015037593984962405,
@@ -4750,6 +4966,8 @@
           "pooled_0.01": {
             "legit_n": 78023,
             "legit_deceived_count": 831,
+            "n_significant_users": 1,
+            "n_groups_users": 30,
             "malicious_deceived": 0.9631578947368421,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -4793,6 +5011,8 @@
           "mondrian_0.01": {
             "legit_n": 78023,
             "legit_deceived_count": 813,
+            "n_significant_users": 0,
+            "n_groups_users": 30,
             "malicious_deceived": 0.9526315789473684,
             "per_group_legit": {
               "Accountant": 0.0037593984962406013,
@@ -4836,6 +5056,8 @@
           "pooled_0.005": {
             "legit_n": 78023,
             "legit_deceived_count": 413,
+            "n_significant_users": 0,
+            "n_groups_users": 30,
             "malicious_deceived": 0.9315789473684211,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -4879,6 +5101,8 @@
           "mondrian_0.005": {
             "legit_n": 78023,
             "legit_deceived_count": 389,
+            "n_significant_users": 0,
+            "n_groups_users": 30,
             "malicious_deceived": 0.8947368421052632,
             "per_group_legit": {
               "Accountant": 0.0037593984962406013,
@@ -4928,6 +5152,8 @@
           "pooled_0.1": {
             "legit_n": 78357,
             "legit_deceived_count": 7332,
+            "n_significant_users": 2,
+            "n_groups_users": 29,
             "malicious_deceived": 0.4634146341463415,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -4971,6 +5197,8 @@
           "mondrian_0.1": {
             "legit_n": 78357,
             "legit_deceived_count": 7228,
+            "n_significant_users": 0,
+            "n_groups_users": 29,
             "malicious_deceived": 0.5691056910569106,
             "per_group_legit": {
               "Accountant": 0.10408921933085502,
@@ -5014,6 +5242,8 @@
           "pooled_0.05": {
             "legit_n": 78357,
             "legit_deceived_count": 3620,
+            "n_significant_users": 3,
+            "n_groups_users": 29,
             "malicious_deceived": 0.1951219512195122,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -5057,6 +5287,8 @@
           "mondrian_0.05": {
             "legit_n": 78357,
             "legit_deceived_count": 3589,
+            "n_significant_users": 0,
+            "n_groups_users": 29,
             "malicious_deceived": 0.3983739837398374,
             "per_group_legit": {
               "Accountant": 0.05947955390334572,
@@ -5100,6 +5332,8 @@
           "pooled_0.01": {
             "legit_n": 78357,
             "legit_deceived_count": 748,
+            "n_significant_users": 0,
+            "n_groups_users": 29,
             "malicious_deceived": 0.032520325203252036,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -5143,6 +5377,8 @@
           "mondrian_0.01": {
             "legit_n": 78357,
             "legit_deceived_count": 626,
+            "n_significant_users": 0,
+            "n_groups_users": 29,
             "malicious_deceived": 0.04065040650406504,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -5186,6 +5422,8 @@
           "pooled_0.005": {
             "legit_n": 78357,
             "legit_deceived_count": 379,
+            "n_significant_users": 0,
+            "n_groups_users": 29,
             "malicious_deceived": 0.016260162601626018,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -5229,6 +5467,8 @@
           "mondrian_0.005": {
             "legit_n": 78357,
             "legit_deceived_count": 315,
+            "n_significant_users": 0,
+            "n_groups_users": 29,
             "malicious_deceived": 0.016260162601626018,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -5274,6 +5514,8 @@
           "pooled_0.1": {
             "legit_n": 78023,
             "legit_deceived_count": 7753,
+            "n_significant_users": 2,
+            "n_groups_users": 30,
             "malicious_deceived": 0.5,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -5317,6 +5559,8 @@
           "mondrian_0.1": {
             "legit_n": 78023,
             "legit_deceived_count": 7879,
+            "n_significant_users": 0,
+            "n_groups_users": 30,
             "malicious_deceived": 0.6210526315789474,
             "per_group_legit": {
               "Accountant": 0.10902255639097744,
@@ -5360,6 +5604,8 @@
           "pooled_0.05": {
             "legit_n": 78023,
             "legit_deceived_count": 3865,
+            "n_significant_users": 2,
+            "n_groups_users": 30,
             "malicious_deceived": 0.26842105263157895,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -5403,6 +5649,8 @@
           "mondrian_0.05": {
             "legit_n": 78023,
             "legit_deceived_count": 3949,
+            "n_significant_users": 0,
+            "n_groups_users": 30,
             "malicious_deceived": 0.4631578947368421,
             "per_group_legit": {
               "Accountant": 0.03007518796992481,
@@ -5446,6 +5694,8 @@
           "pooled_0.01": {
             "legit_n": 78023,
             "legit_deceived_count": 783,
+            "n_significant_users": 2,
+            "n_groups_users": 30,
             "malicious_deceived": 0.042105263157894736,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -5489,6 +5739,8 @@
           "mondrian_0.01": {
             "legit_n": 78023,
             "legit_deceived_count": 790,
+            "n_significant_users": 0,
+            "n_groups_users": 30,
             "malicious_deceived": 0.11578947368421053,
             "per_group_legit": {
               "Accountant": 0.0037593984962406013,
@@ -5532,6 +5784,8 @@
           "pooled_0.005": {
             "legit_n": 78023,
             "legit_deceived_count": 380,
+            "n_significant_users": 1,
+            "n_groups_users": 30,
             "malicious_deceived": 0.02631578947368421,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -5575,6 +5829,8 @@
           "mondrian_0.005": {
             "legit_n": 78023,
             "legit_deceived_count": 393,
+            "n_significant_users": 0,
+            "n_groups_users": 30,
             "malicious_deceived": 0.04736842105263158,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -5627,6 +5883,8 @@
           "pooled_0.1": {
             "legit_n": 78357,
             "legit_deceived_count": 7170,
+            "n_significant_users": 4,
+            "n_groups_users": 29,
             "malicious_deceived": 1.0,
             "per_group_legit": {
               "Accountant": 0.007434944237918215,
@@ -5670,6 +5928,8 @@
           "mondrian_0.1": {
             "legit_n": 78357,
             "legit_deceived_count": 7150,
+            "n_significant_users": 1,
+            "n_groups_users": 29,
             "malicious_deceived": 1.0,
             "per_group_legit": {
               "Accountant": 0.12267657992565056,
@@ -5713,6 +5973,8 @@
           "pooled_0.05": {
             "legit_n": 78357,
             "legit_deceived_count": 3519,
+            "n_significant_users": 2,
+            "n_groups_users": 29,
             "malicious_deceived": 1.0,
             "per_group_legit": {
               "Accountant": 0.0037174721189591076,
@@ -5756,6 +6018,8 @@
           "mondrian_0.05": {
             "legit_n": 78357,
             "legit_deceived_count": 3640,
+            "n_significant_users": 1,
+            "n_groups_users": 29,
             "malicious_deceived": 1.0,
             "per_group_legit": {
               "Accountant": 0.055762081784386616,
@@ -5799,6 +6063,8 @@
           "pooled_0.01": {
             "legit_n": 78357,
             "legit_deceived_count": 589,
+            "n_significant_users": 1,
+            "n_groups_users": 29,
             "malicious_deceived": 0.967479674796748,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -5842,6 +6108,8 @@
           "mondrian_0.01": {
             "legit_n": 78357,
             "legit_deceived_count": 648,
+            "n_significant_users": 0,
+            "n_groups_users": 29,
             "malicious_deceived": 0.959349593495935,
             "per_group_legit": {
               "Accountant": 0.007434944237918215,
@@ -5885,6 +6153,8 @@
           "pooled_0.005": {
             "legit_n": 78357,
             "legit_deceived_count": 247,
+            "n_significant_users": 0,
+            "n_groups_users": 29,
             "malicious_deceived": 0.9512195121951219,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -5928,6 +6198,8 @@
           "mondrian_0.005": {
             "legit_n": 78357,
             "legit_deceived_count": 376,
+            "n_significant_users": 0,
+            "n_groups_users": 29,
             "malicious_deceived": 0.9512195121951219,
             "per_group_legit": {
               "Accountant": 0.007434944237918215,
@@ -5973,6 +6245,8 @@
           "pooled_0.1": {
             "legit_n": 78041,
             "legit_deceived_count": 8022,
+            "n_significant_users": 7,
+            "n_groups_users": 30,
             "malicious_deceived": 0.9941860465116279,
             "per_group_legit": {
               "Accountant": 0.017921146953405017,
@@ -6017,6 +6291,8 @@
           "mondrian_0.1": {
             "legit_n": 78041,
             "legit_deceived_count": 7954,
+            "n_significant_users": 0,
+            "n_groups_users": 30,
             "malicious_deceived": 1.0,
             "per_group_legit": {
               "Accountant": 0.11827956989247312,
@@ -6061,6 +6337,8 @@
           "pooled_0.05": {
             "legit_n": 78041,
             "legit_deceived_count": 3994,
+            "n_significant_users": 2,
+            "n_groups_users": 30,
             "malicious_deceived": 0.9941860465116279,
             "per_group_legit": {
               "Accountant": 0.007168458781362007,
@@ -6105,6 +6383,8 @@
           "mondrian_0.05": {
             "legit_n": 78041,
             "legit_deceived_count": 3937,
+            "n_significant_users": 0,
+            "n_groups_users": 30,
             "malicious_deceived": 0.9941860465116279,
             "per_group_legit": {
               "Accountant": 0.06093189964157706,
@@ -6149,6 +6429,8 @@
           "pooled_0.01": {
             "legit_n": 78041,
             "legit_deceived_count": 734,
+            "n_significant_users": 1,
+            "n_groups_users": 30,
             "malicious_deceived": 0.9651162790697675,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -6193,6 +6475,8 @@
           "mondrian_0.01": {
             "legit_n": 78041,
             "legit_deceived_count": 751,
+            "n_significant_users": 0,
+            "n_groups_users": 30,
             "malicious_deceived": 0.9534883720930233,
             "per_group_legit": {
               "Accountant": 0.017921146953405017,
@@ -6237,6 +6521,8 @@
           "pooled_0.005": {
             "legit_n": 78041,
             "legit_deceived_count": 381,
+            "n_significant_users": 1,
+            "n_groups_users": 30,
             "malicious_deceived": 0.9476744186046512,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -6281,6 +6567,8 @@
           "mondrian_0.005": {
             "legit_n": 78041,
             "legit_deceived_count": 370,
+            "n_significant_users": 0,
+            "n_groups_users": 30,
             "malicious_deceived": 0.8895348837209303,
             "per_group_legit": {
               "Accountant": 0.007168458781362007,
@@ -6331,6 +6619,8 @@
           "pooled_0.1": {
             "legit_n": 78357,
             "legit_deceived_count": 7256,
+            "n_significant_users": 2,
+            "n_groups_users": 29,
             "malicious_deceived": 0.5040650406504065,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -6374,6 +6664,8 @@
           "mondrian_0.1": {
             "legit_n": 78357,
             "legit_deceived_count": 7221,
+            "n_significant_users": 0,
+            "n_groups_users": 29,
             "malicious_deceived": 0.5934959349593496,
             "per_group_legit": {
               "Accountant": 0.13382899628252787,
@@ -6417,6 +6709,8 @@
           "pooled_0.05": {
             "legit_n": 78357,
             "legit_deceived_count": 3649,
+            "n_significant_users": 3,
+            "n_groups_users": 29,
             "malicious_deceived": 0.21951219512195122,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -6460,6 +6754,8 @@
           "mondrian_0.05": {
             "legit_n": 78357,
             "legit_deceived_count": 3553,
+            "n_significant_users": 0,
+            "n_groups_users": 29,
             "malicious_deceived": 0.43089430894308944,
             "per_group_legit": {
               "Accountant": 0.05947955390334572,
@@ -6503,6 +6799,8 @@
           "pooled_0.01": {
             "legit_n": 78357,
             "legit_deceived_count": 756,
+            "n_significant_users": 1,
+            "n_groups_users": 29,
             "malicious_deceived": 0.032520325203252036,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -6546,6 +6844,8 @@
           "mondrian_0.01": {
             "legit_n": 78357,
             "legit_deceived_count": 619,
+            "n_significant_users": 0,
+            "n_groups_users": 29,
             "malicious_deceived": 0.06504065040650407,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -6589,6 +6889,8 @@
           "pooled_0.005": {
             "legit_n": 78357,
             "legit_deceived_count": 380,
+            "n_significant_users": 0,
+            "n_groups_users": 29,
             "malicious_deceived": 0.024390243902439025,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -6632,6 +6934,8 @@
           "mondrian_0.005": {
             "legit_n": 78357,
             "legit_deceived_count": 323,
+            "n_significant_users": 0,
+            "n_groups_users": 29,
             "malicious_deceived": 0.016260162601626018,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -6677,6 +6981,8 @@
           "pooled_0.1": {
             "legit_n": 78041,
             "legit_deceived_count": 7933,
+            "n_significant_users": 2,
+            "n_groups_users": 30,
             "malicious_deceived": 0.5930232558139535,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -6721,6 +7027,8 @@
           "mondrian_0.1": {
             "legit_n": 78041,
             "legit_deceived_count": 7924,
+            "n_significant_users": 0,
+            "n_groups_users": 30,
             "malicious_deceived": 0.686046511627907,
             "per_group_legit": {
               "Accountant": 0.11469534050179211,
@@ -6765,6 +7073,8 @@
           "pooled_0.05": {
             "legit_n": 78041,
             "legit_deceived_count": 3991,
+            "n_significant_users": 2,
+            "n_groups_users": 30,
             "malicious_deceived": 0.313953488372093,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -6809,6 +7119,8 @@
           "mondrian_0.05": {
             "legit_n": 78041,
             "legit_deceived_count": 3904,
+            "n_significant_users": 0,
+            "n_groups_users": 30,
             "malicious_deceived": 0.5465116279069767,
             "per_group_legit": {
               "Accountant": 0.053763440860215055,
@@ -6853,6 +7165,8 @@
           "pooled_0.01": {
             "legit_n": 78041,
             "legit_deceived_count": 774,
+            "n_significant_users": 2,
+            "n_groups_users": 30,
             "malicious_deceived": 0.05813953488372093,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -6897,6 +7211,8 @@
           "mondrian_0.01": {
             "legit_n": 78041,
             "legit_deceived_count": 746,
+            "n_significant_users": 0,
+            "n_groups_users": 30,
             "malicious_deceived": 0.11046511627906977,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -6941,6 +7257,8 @@
           "pooled_0.005": {
             "legit_n": 78041,
             "legit_deceived_count": 392,
+            "n_significant_users": 1,
+            "n_groups_users": 30,
             "malicious_deceived": 0.040697674418604654,
             "per_group_legit": {
               "Accountant": 0.0,
@@ -6985,6 +7303,8 @@
           "mondrian_0.005": {
             "legit_n": 78041,
             "legit_deceived_count": 410,
+            "n_significant_users": 0,
+            "n_groups_users": 30,
             "malicious_deceived": 0.06976744186046512,
             "per_group_legit": {
               "Accountant": 0.0,

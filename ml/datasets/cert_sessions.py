@@ -41,7 +41,7 @@ for p in (_HERE, _ML, os.path.join(_ML, "experiments"), _ROOT):
     if p not in sys.path:
         sys.path.insert(0, p)
 import cert_r42 as base  # noqa: E402
-from deception_guarantee import baselines, excess, fast_eval, session_summary  # noqa: E402
+from deception_guarantee import baselines, excess, excess_users, fast_eval, session_summary  # noqa: E402
 from safe_deception import SESSION_GAP_MIN, DeceptionGate, clopper_pearson  # noqa: E402
 
 ALPHAS = [0.10, 0.05, 0.01, 0.005]
@@ -133,14 +133,15 @@ def timing(d: pd.DataFrame, gate: DeceptionGate) -> float | None:
 
 def _decisions(gate: DeceptionGate, ts: pd.DataFrame, use_groups: bool) -> pd.DataFrame:
     tau = ts["g"].map(lambda g: gate.thresholds(g if use_groups else None)[0]).to_numpy(float)
-    return pd.DataFrame({"hit": ts["m"].to_numpy() > tau, "a": ts["a"].to_numpy(), "g": ts["g"].to_numpy()})
+    return pd.DataFrame({"hit": ts["m"].to_numpy() > tau, "a": ts["a"].to_numpy(), "g": ts["g"].to_numpy(), "u": ts["u"].to_numpy()})
 
 
 def _summarise_decisions(d: pd.DataFrame, alpha: float) -> dict:
     legit = d[~d.a]
     return {"legit_ever_noise": float(legit.hit.mean()), "legit_deceived_count": int(legit.hit.sum()), "legit_sessions": int(len(legit)),
             "attack_deceived": float(d[d.a].hit.mean()) if d.a.any() else None,
-            "excess": excess(legit.hit.to_numpy(), legit.g.to_numpy(), alpha)}
+            "excess": excess(legit.hit.to_numpy(), legit.g.to_numpy(), alpha),
+            "excess_users": excess_users(legit.hit.to_numpy(), legit.g.to_numpy(), legit.u.to_numpy(), alpha)}
 
 
 def rolling(D: pd.DataFrame, start: pd.Series, tr: np.ndarray, mid, block: dict) -> dict:
@@ -204,7 +205,7 @@ def run_seed(E: pd.DataFrame, feats: list[str], seed: int) -> dict:
     res = {"seed": seed, "detectors": {}}
     for det, sc in S.items():
         D = pd.DataFrame({"sess": E["sess"].to_numpy(), "score": sc, "is_attack": E["sess_mal"].to_numpy(),
-                          "mal": E["mal"].to_numpy(), "sess_mal": E["sess_mal"].to_numpy(), "group": E["group"].to_numpy(),
+                          "mal": E["mal"].to_numpy(), "sess_mal": E["sess_mal"].to_numpy(), "group": E["group"].to_numpy(), "user": E["user"].to_numpy(),
                           "attack_family": np.where(E["sess_mal"].to_numpy(), "insider", "normal")})
         post = ~tr
         sess_post = D[post].groupby("sess").agg(m=("score", "max"), a=("is_attack", "max"))
@@ -261,7 +262,12 @@ def _worst(blocks: list[dict]) -> float:
 
 
 def _sig(blocks: list[dict]) -> str:
-    return f"{sum(b['excess']['n_significant'] for b in blocks)} / {sum(b['excess']['n_groups'] for b in blocks)}"
+    """Role-seeds significantly above alpha: treating sessions as independent, and (in brackets) with
+    users as clusters."""
+    s = f"{sum(b['excess']['n_significant'] for b in blocks)} / {sum(b['excess']['n_groups'] for b in blocks)}"
+    if all("excess_users" in b for b in blocks):
+        s += f" ({sum(b['excess_users']['n_significant'] for b in blocks)} / {sum(b['excess_users']['n_groups'] for b in blocks)})"
+    return s
 
 
 def _mean(blocks: list[dict], key: str):
@@ -279,8 +285,10 @@ def write_report(runs: list[dict], info: dict) -> None:
           f"grouped into {info['sessions']:,} sessions (no gap over {SESSION_GAP_MIN} min), {info['malicious_sessions']:,} of them containing "
           f"malicious events; {info['groups']} role groups. The gate re-decides at every event; a session counts as deceived if it was "
           f"deceived at any event. Mean of {len(runs)} seeds. Rates are pooled over seeds with a 95 % Clopper-Pearson interval; 'worst role' "
-          "averages each role over seeds, then takes the maximum; 'roles above alpha' counts roles significantly above alpha "
-          "(one-sided binomial test, Holm-corrected, 5 %), summed over seeds.", "",
+          "averages each role over seeds, then takes the maximum; 'roles above alpha' counts role-seeds significantly above alpha "
+          "(Holm-corrected, 5 %), summed over seeds, first treating sessions as independent (one-sided binomial test) and, in "
+          "brackets, with users as clusters (user-level bootstrap over roles with at least 5 users; smaller roles cannot be tested "
+          "as roles). Sessions of one person are dependent, so the bracketed count is the one to rely on.", "",
           "Session-level detection on the post-training period (session maximum score): " +
           "; ".join(f"{d} ROC-AUC {np.mean([r['detectors'][d]['session_roc_auc'] for r in runs]):.3f}, "
                     f"PR-AUC {np.mean([r['detectors'][d]['session_pr_auc'] for r in runs]):.3f}" for d in dets) + ".", ""]

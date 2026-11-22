@@ -303,7 +303,7 @@ def experiment(seeds: int = 5, ablation: str | None = None) -> None:
     print(f"user-days {len(F):,}; train {tr.sum():,} ({y[tr].sum()} malicious); post {(~tr).sum():,} ({y[~tr].sum()} malicious); "
           f"groups {F.loc[~tr, 'group'].nunique()}")
 
-    from safe_deception import clopper_pearson, group_excess
+    from safe_deception import clopper_pearson, group_excess, group_excess_clustered
 
     def gate_result(sc, cal_mask, te_mask, a, mode):
         gate = DeceptionGate(alpha_noise=a, alpha_full=a / 5).fit(
@@ -312,7 +312,9 @@ def experiment(seeds: int = 5, ablation: str | None = None) -> None:
         tn = np.array([gate.thresholds(g)[0] for g in gg]) if mode == "mondrian" else np.full(len(gg), gate.tau_noise)
         dec, yy = sc[te_mask] > tn, y[te_mask]
         ex = group_excess(dec[~yy], gg[~yy], a, min_n=200)
-        return {"legit_n": int((~yy).sum()), "legit_deceived_count": int(dec[~yy].sum()),
+        exu = group_excess_clustered(dec[~yy], gg[~yy], F.loc[te_mask, "user"].to_numpy()[~yy], a, min_n=200)
+        return {"legit_n": int((~yy).sum()), "legit_deceived_count": int(dec[~yy].sum()), "n_significant_users": exu["n_significant"],
+                "n_groups_users": exu["n_groups"],
                 "malicious_deceived": float(dec[yy].mean()) if yy.any() else None,
                 "per_group_legit": {r["group"]: r["rate"] for r in ex["groups"]},
                 "n_groups": ex["n_groups"], "n_significant": ex["n_significant"]}
@@ -354,8 +356,9 @@ def experiment(seeds: int = 5, ablation: str | None = None) -> None:
           f"Public synthetic benchmark (CMU SEI). {len(F):,} user-days ({int(y.sum())} malicious, {F.user.nunique()} users), "
           f"{len(feats)} features, {F.loc[~tr, 'group'].nunique()} role groups. Detectors trained on the first half of the period; mean over {seeds} seeds. "
           "'Legit deceived' = share of normal user-days put on deception, pooled over seeds with a 95 % Clopper-Pearson interval; "
-          "'worst role' averages each role over seeds, then takes the maximum; 'roles above alpha' counts roles significantly above "
-          "alpha (one-sided binomial test, Holm-corrected, 5 %), summed over seeds. For many decisions per session see CERT_SESSIONS.md.", "",
+          "'worst role' averages each role over seeds, then takes the maximum; 'roles above alpha' counts role-seeds significantly above "
+          "alpha (Holm-corrected, 5 %), summed over seeds: treating days as independent (binomial test) and, in brackets, with users as "
+          "clusters (user-level bootstrap, roles with at least 5 users), the count to rely on. For many decisions per session see CERT_SESSIONS.md.", "",
           "Detection on the post-training period: " + "; ".join(
               f"{d} ROC-AUC {np.mean([r[d]['roc_auc'] for r in runs]):.3f}, PR-AUC {np.mean([r[d]['pr_auc'] for r in runs]):.3f}" for d in ("xgb", "iforest")) + "."]
     for proto, title in (("temporal", "Main result: time-ordered calibration (earlier days calibrate, later days evaluate)"),
@@ -374,7 +377,8 @@ def experiment(seeds: int = 5, ablation: str | None = None) -> None:
                         for g, v in b["per_group_legit"].items():
                             per.setdefault(g, []).append(v)
                     worst = max((float(np.mean(v)) for v in per.values()), default=0.0)
-                    sig = f"{sum(b['n_significant'] for b in bl)} / {sum(b['n_groups'] for b in bl)}"
+                    sig = (f"{sum(b['n_significant'] for b in bl)} / {sum(b['n_groups'] for b in bl)}"
+                           f" ({sum(b['n_significant_users'] for b in bl)} / {sum(b['n_groups_users'] for b in bl)})")
                     mal = [b["malicious_deceived"] for b in bl if b["malicious_deceived"] is not None]
                     return k / n, clopper_pearson(k, n), worst, sig, (float(np.mean(mal)) if mal else None)
                 rate, (lo, hi), worst, sig, mal = agg("mondrian")

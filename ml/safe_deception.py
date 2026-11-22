@@ -119,6 +119,44 @@ def group_excess(deceived: np.ndarray, groups: np.ndarray, alpha: float, min_n: 
             "worst": worst}
 
 
+def group_excess_clustered(deceived: np.ndarray, groups: np.ndarray, clusters: np.ndarray, alpha: float,
+                           min_n: int = 1, level: float = 0.05, n_boot: int = 2000, seed: int = 0, min_users: int = 5) -> dict:
+    """Like group_excess, but sessions of the same user (cluster) are not treated as independent.
+    Within each group, users are resampled with replacement (cluster bootstrap); the group's rate is
+    total deceived / total sessions of the resampled users. Gives a 95 % percentile interval and a
+    one-sided bootstrap p-value for H0: rate <= alpha (share of bootstrap rates <= alpha), then Holm
+    across groups. A bootstrap over very few clusters is unreliable, so groups with fewer than min_users
+    users are reported (rate, users) but not tested ("too_few_users"); they are left out of Holm."""
+    x = np.asarray(deceived, dtype=bool)
+    g = np.asarray(groups).astype(str)
+    c = np.asarray(clusters).astype(str)
+    rng = np.random.default_rng(seed)
+    rows, untested = [], []
+    for grp in np.unique(g):
+        m = g == grp
+        n = int(m.sum())
+        if n < min_n:
+            continue
+        per = pd.DataFrame({"c": c[m], "x": x[m]}).groupby("c")["x"].agg(["sum", "size"])
+        k_u, n_u = per["sum"].to_numpy(float), per["size"].to_numpy(float)
+        if len(per) < min_users:
+            untested.append({"group": grp, "n": n, "users": int(len(per)), "rate": float(k_u.sum() / n)})
+            continue
+        idx = rng.integers(0, len(per), size=(n_boot, len(per)))
+        boot = k_u[idx].sum(axis=1) / n_u[idx].sum(axis=1)
+        p = float((1 + np.sum(boot <= alpha)) / (n_boot + 1))
+        rows.append({"group": grp, "n": n, "users": int(len(per)), "deceived": int(k_u.sum()), "rate": float(k_u.sum() / n),
+                     "ci_low": float(np.quantile(boot, 0.025)), "ci_high": float(np.quantile(boot, 0.975)),
+                     "top_user_share": float(k_u.max() / k_u.sum()) if k_u.sum() else 0.0, "p_value": p})
+    order = sorted(range(len(rows)), key=lambda i: rows[i]["p_value"])
+    running = 0.0
+    for rank, i in enumerate(order):
+        running = max(running, min(1.0, (len(rows) - rank) * rows[i]["p_value"]))
+        rows[i]["p_holm"] = running
+    return {"alpha": alpha, "groups": rows, "n_groups": len(rows), "n_significant": sum(r["p_holm"] < level for r in rows),
+            "worst": max(rows, key=lambda r: r["rate"]) if rows else None, "too_few_users": untested}
+
+
 def conformal_pvalue(cal_scores: np.ndarray, score: float) -> float:
     """p = (1 + #{cal >= score}) / (n + 1). Small p = unusual for legitimate sessions."""
     s = np.asarray(cal_scores, dtype=float)

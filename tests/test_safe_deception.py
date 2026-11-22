@@ -12,7 +12,7 @@ for p in (_ROOT, os.path.join(_ROOT, "ml")):
     if p not in sys.path:
         sys.path.insert(0, p)
 from safe_deception import (DeceptionGate, clopper_pearson, conformal_pvalue, conformal_threshold,  # noqa: E402
-                            group_excess, monitor, np_umbrella_threshold)
+                            group_excess, group_excess_clustered, monitor, np_umbrella_threshold)
 
 
 def test_marginal_bound_holds_on_exchangeable_data():
@@ -99,6 +99,24 @@ def test_contamination_bound_of_proposition_3():
     bound = alpha * (1 + m / (n + 1))
     assert np.mean(rates) <= bound + 0.003            # Monte-Carlo slack
     assert np.mean(rates) > alpha                      # and the inflation is real, not hypothetical
+
+
+def test_clustered_excess_does_not_blame_a_role_for_one_user():
+    """One user with many deceived sessions makes a session-level test fire for the whole role;
+    the user-level (cluster) bootstrap does not, while a role where many users are affected still fires."""
+    rng = np.random.default_rng(7)
+    users_a = np.repeat([f"a{i}" for i in range(3)], 400)                 # 3 users, one of them drifted
+    dec_a = np.concatenate([rng.random(400) < 0.15, rng.random(400) < 0.005, rng.random(400) < 0.005])
+    users_b = np.repeat([f"b{i}" for i in range(60)], 40)                 # 60 users, all at 4 %
+    dec_b = rng.random(len(users_b)) < 0.04
+    users_c = np.repeat([f"c{i}" for i in range(60)], 40)                 # 60 users at alpha
+    dec_c = rng.random(len(users_c)) < 0.01
+    dec = np.concatenate([dec_a, dec_b, dec_c])
+    grp = np.concatenate([np.full(len(dec_a), "A"), np.full(len(dec_b), "B"), np.full(len(dec_c), "C")])
+    users = np.concatenate([users_a, users_b, users_c])
+    naive = {r["group"] for r in group_excess(dec, grp, 0.01)["groups"] if r["p_holm"] < 0.05}
+    clustered = {r["group"] for r in group_excess_clustered(dec, grp, users, 0.01)["groups"] if r["p_holm"] < 0.05}
+    assert naive == {"A", "B"} and clustered == {"B"}
 
 
 def test_np_umbrella_holds_with_high_probability():

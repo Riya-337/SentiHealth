@@ -39,7 +39,7 @@ for p in (_ML, _ROOT):
         sys.path.insert(0, p)
 import simulate_events as sim  # noqa: E402
 from features import FEATURE_NAMES, build_feature_table  # noqa: E402
-from safe_deception import (DeceptionGate, clopper_pearson, conformal_threshold, group_excess,  # noqa: E402
+from safe_deception import (DeceptionGate, clopper_pearson, conformal_threshold, group_excess, group_excess_clustered,  # noqa: E402
                             np_umbrella_threshold, sessionize)
 
 ALPHAS = [0.10, 0.05, 0.02, 0.01, 0.005]
@@ -114,10 +114,13 @@ def session_table(F: pd.DataFrame, mask: np.ndarray, score: np.ndarray) -> pd.Da
 
 
 def session_summary(d: pd.DataFrame) -> pd.DataFrame:
-    """One row per session: whole-session maximum score, attack flag, group and attack family."""
+    """One row per session: whole-session maximum score, attack flag, group and attack family, and the
+    user (column u) when the data has one."""
     fam = d["attack_family"].where(d["attack_family"] != "normal")
-    return (d.assign(fam=fam).groupby("sess")
-            .agg(m=("score", "max"), a=("is_attack", "max"), g=("group", "first"), f=("fam", "first"))
+    agg = dict(m=("score", "max"), a=("is_attack", "max"), g=("group", "first"), f=("fam", "first"))
+    if "user" in d.columns:
+        agg["u"] = ("user", "first")
+    return (d.assign(fam=fam).groupby("sess").agg(**agg)
             .assign(a=lambda x: x.a.astype(bool), f=lambda x: x.f.fillna("normal")))
 
 
@@ -126,6 +129,13 @@ def excess(dec_legit: np.ndarray, groups: np.ndarray, alpha: float) -> dict:
     r = group_excess(dec_legit, groups, alpha, min_n=20)
     return {"per_group": {x["group"]: {k: x[k] for k in ("n", "deceived", "rate", "ci_low", "ci_high", "p_holm")} for x in r["groups"]},
             "n_groups": r["n_groups"], "n_significant": r["n_significant"]}
+
+
+def excess_users(dec_legit: np.ndarray, groups: np.ndarray, users: np.ndarray, alpha: float) -> dict:
+    """Per-role intervals and significance with users as clusters (sessions of one user are dependent)."""
+    r = group_excess_clustered(dec_legit, groups, users, alpha, min_n=20)
+    return {"per_group": {x["group"]: {k: x[k] for k in ("n", "users", "rate", "ci_low", "ci_high", "top_user_share", "p_holm")} for x in r["groups"]},
+            "n_groups": r["n_groups"], "n_significant": r["n_significant"], "too_few_users": r["too_few_users"]}
 
 
 def evaluate_gate(gate: DeceptionGate, d: pd.DataFrame, use_groups: bool) -> dict:
@@ -171,9 +181,12 @@ def fast_eval(gate: DeceptionGate, ts: pd.DataFrame, use_groups: bool) -> dict:
     tau = ts["g"].map(lambda g: gate.thresholds(g if use_groups else None)[0]).to_numpy(float)
     hit = ts["m"].to_numpy() > tau
     legit, att = ~ts["a"].to_numpy(), ts["a"].to_numpy()
-    return {"legit_ever_noise": float(hit[legit].mean()), "legit_deceived_count": int(hit[legit].sum()),
-            "legit_sessions": int(legit.sum()), "attack_deceived": float(hit[att].mean()) if att.any() else None,
-            "excess": excess(hit[legit], ts["g"].to_numpy()[legit], gate.alpha_noise)}
+    out = {"legit_ever_noise": float(hit[legit].mean()), "legit_deceived_count": int(hit[legit].sum()),
+           "legit_sessions": int(legit.sum()), "attack_deceived": float(hit[att].mean()) if att.any() else None,
+           "excess": excess(hit[legit], ts["g"].to_numpy()[legit], gate.alpha_noise)}
+    if "u" in ts.columns:
+        out["excess_users"] = excess_users(hit[legit], ts["g"].to_numpy()[legit], ts["u"].to_numpy()[legit], gate.alpha_noise)
+    return out
 
 
 def baselines(cal_events: pd.DataFrame, legit_cal: pd.DataFrame, ts: pd.DataFrame, alpha: float) -> dict:

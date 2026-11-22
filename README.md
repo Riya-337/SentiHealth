@@ -36,14 +36,17 @@ P(a legitimate session is ever deceived) ≤ α
 
 The bound covers the whole session, so the repeated per-event decisions do not add up. Mislabelled attacks in the calibration set can loosen it, but by at most a factor of 1 + m/(n+1) for m mislabelled among n sessions. Statements and proofs: [`docs/theory.md`](docs/theory.md). Research write-up: [`docs/research_safe_deception.md`](docs/research_safe_deception.md). Positioning against prior work: [`docs/related_work.md`](docs/related_work.md). Code: [`ml/safe_deception.py`](ml/safe_deception.py).
 
-**Results on a public benchmark.** CERT Insider Threat r4.2: 4.13 M logon, USB, file and e-mail events grouped into 1.44 M sessions, the gate re-deciding at every event. Time-ordered calibration (earlier sessions calibrate, later ones evaluate), α = 1 %, mean of 5 seeds; "significant" counts role-seeds whose rate is significantly above α:
+**Results on a public benchmark.** CERT Insider Threat r4.2: 4.13 M logon, USB, file and e-mail events grouped into 1.44 M sessions, the gate re-deciding at every event. Time-ordered calibration (earlier sessions calibrate, later ones evaluate), α = 1 %, mean of 5 seeds. *Roles above α* counts role-seeds whose rate is significantly above α with users as clusters (sessions of one person are not independent), over roles with at least 5 users:
 
-| Detector | Per-role gate: worst role | Significant | Shared threshold: worst role | Significant | Malicious sessions deceived |
+| Detector | Rule | Legitimate sessions deceived | Roles above α | Worst role | Malicious sessions deceived |
 |---|---|---|---|---|---|
-| Isolation Forest | 1.48 % | 0 / 195 | 13.42 % | 52 / 195 | 3.4 % |
-| XGBoost | 6.68 % | 61 / 195 | 8.48 % | 34 / 195 | 66.3 % |
+| Isolation Forest | **per-role gate** | 0.96 % | **0 / 145** | 1.48 % | 3.4 % |
+| Isolation Forest | shared threshold | 0.99 % | 5 / 145 | 13.42 % | 1.6 % |
+| XGBoost | **per-role gate** | 1.01 % | **0 / 145** | 6.68 % | 66.3 % |
+| XGBoost | shared threshold | 0.77 % | 5 / 145 | 8.48 % | 68.4 % |
+| XGBoost | per-event conformal | 1.39 % | 10 / 145 | 16.11 % | 75.2 % |
 
-The overall rate matches α in every setting. A shared threshold lets some roles carry many times their share of false deceptions; the per-role gate prevents this with the anomaly detector. With the supervised detector it does not: in roles with only two or three members, one person whose behaviour changes between the calibration and evaluation periods pushes the whole role above α (for example 5 of 355 sessions deceived before, 62 of 381 after). Monthly recalibration does not fix this, because it is individual rather than population drift. The detector that keeps every role safe is also the one that catches few insiders. Details: [`evaluation/CERT_SESSIONS.md`](evaluation/CERT_SESSIONS.md), the one-decision-per-day version [`evaluation/CERT_R42.md`](evaluation/CERT_R42.md), and the analysis in [`docs/research_safe_deception.md`](docs/research_safe_deception.md#33-cert-insider-threat-r42-public-benchmark).
+The overall rate matches α, and the per-role gate leaves no role of five or more people significantly above it, with either detector; a shared threshold and per-event calibration do. The one-decision-per-day experiment agrees (0 / 145 for the per-role gate, up to 5 / 145 for a shared threshold). What remains is individual: in roles of two or three people, one person whose behaviour changes between calibration and evaluation can push the role's rate up (XGBoost worst role 6.7 %; one user goes from 5 of 355 sessions deceived to 62 of 381). The detector with the lowest false-deception rates also catches few insiders. Details: [`evaluation/CERT_SESSIONS.md`](evaluation/CERT_SESSIONS.md), [`evaluation/CERT_R42.md`](evaluation/CERT_R42.md) and the analysis in [`docs/research_safe_deception.md`](docs/research_safe_deception.md#33-cert-insider-threat-r42-public-benchmark).
 
 **Other findings.**
 - On **WUSTL-EHMS-2020** (a public healthcare network testbed), XGBoost reaches F1 1.00 only because of identifier columns (addresses, ports, MACs). Without them F1 is 0.71. [`evaluation/WUSTL_EHMS.md`](evaluation/WUSTL_EHMS.md)
